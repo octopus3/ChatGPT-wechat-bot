@@ -1,6 +1,6 @@
 export default {
   // 填入你的OPENAI_API_KEY
-  OPENAI_API_KEY: "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",
+  OPENAI_API_KEY: "",
   // OPENAI_API_KEY: "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",
   // 反向代理地址，简单说就是你的在国外服务器地址，如何获取看README
   // 可换成你自己的，白嫖代理地址 https://ai.devtool.tech/proxy/v1/chat/completions
