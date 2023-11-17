@@ -2,10 +2,12 @@ import { WechatyBuilder } from "wechaty";
 import qrcodeTerminal from "qrcode-terminal";
 import config from "./config.js";
 import ChatGPT from "./chatgpt.js";
+import ChatGPT4 from "./chatgpt4.js"
 
 let bot: any = {};
 const startTime = new Date();
 let chatGPTClient: any = null;
+let chatGPTClient4: any = null;
 initProject();
 async function onMessage(msg) {
   // 避免重复发送
@@ -29,8 +31,13 @@ async function onMessage(msg) {
     );
 
     const pattern = RegExp(`^@${receiver.name()}\\s+${config.groupKey}[\\s]*`);
+    const pattern4 = RegExp(`^@${receiver.name()}\\s+GPT4[\\s]*`);
     if (await msg.mentionSelf()) {
-      if (pattern.test(content)) {
+      if(pattern4.test(content)) {
+        const groupContent = content.replace(pattern, "");
+        chatGPTClient4.replyMessage(room, groupContent);
+        return;
+      } else if (pattern.test(content)) {
         const groupContent = content.replace(pattern, "");
         chatGPTClient.replyMessage(room, groupContent);
         return;
@@ -45,9 +52,15 @@ async function onMessage(msg) {
     if (content.startsWith(config.privateKey) || config.privateKey === "") {
       let privateContent = content;
       if (config.privateKey === "") {
-        privateContent = content.substring(config.privateKey.length).trim();
+        if(content.startsWith("GPT4 ")) {
+          privateContent = content.split(" ")[1].trim();
+          chatGPTClient4.replyMessage(contact, privateContent);
+        }else {
+          privateContent = content.substring(config.privateKey.length).trim();
+          chatGPTClient.replyMessage(contact, privateContent);
+        }
       }
-      chatGPTClient.replyMessage(contact, privateContent);
+
     } else {
       console.log(
         "Content is not within the scope of the customizition format"
@@ -79,6 +92,7 @@ function onLogout(user) {
 async function initProject() {
   try {
     chatGPTClient = new ChatGPT();
+    chatGPTClient4 = new ChatGPT4();
     bot = WechatyBuilder.build({
       name: "WechatEveryDay",
       puppet: "wechaty-puppet-wechat", // 如果有token，记得更换对应的puppet
