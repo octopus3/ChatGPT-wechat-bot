@@ -130,7 +130,11 @@ export default class ChatGPT {
     }else if(saveImage.test(content)) {
       // 保存表情包链接
       try {
-        await contact.say("已得到表情包链接\n下载后请自行修改文件后缀\n ------------------\n" + imgStr)
+        if(imgStr == null || imgStr == '' || imgStr == undefined) {
+          await contact.say("无法保存微信内部表情")
+        }else {
+          await contact.say("已得到表情包链接\n下载后请自行修改文件后缀\n ------------------\n" + imgStr)
+        }
       }catch(e:any) {
 
       }
@@ -142,7 +146,11 @@ export default class ChatGPT {
   // 私聊
   async repeatSaveImage(contact) {
     const { id: contactId, imgStr } = contact;
-    contact.say("已得到表情包链接\n下载后请自行修改文件后缀\n ------------------\n" + imgStr)
+    if(imgStr == null || imgStr == '' || imgStr == undefined) {
+      await contact.say("无法保存微信内部表情")
+    }else {
+      await contact.say("已得到表情包链接\n下载后请自行修改文件后缀\n ------------------\n" + imgStr)
+    }
   }
 
   async changeRoomName(contact, content) {

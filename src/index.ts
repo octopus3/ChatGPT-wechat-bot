@@ -55,6 +55,9 @@ async function onMessage(msg) {
         chatGPTClient.changeRoomName(room, groupContent);
         return;
       }
+      if(content == "[收到了一个表情，请在手机上查看]") {
+        room.imgStr = '';
+      }
       chatGPTClient.repeatMsg(room, content);
     }
   } else if(room && isImage) {
@@ -67,6 +70,9 @@ async function onMessage(msg) {
     }
   }else if (isText) {
     console.log(`talker: ${alias} content: ${content}`);
+    if(content == "[收到了一个表情，请在手机上查看]") {
+      contact.imgStr = '';
+    }
     if (content.startsWith(config.privateKey) || config.privateKey === "") {
       let privateContent = content;
       if (config.privateKey === "") {
