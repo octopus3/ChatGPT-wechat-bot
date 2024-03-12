@@ -55,9 +55,6 @@ async function onMessage(msg) {
         chatGPTClient.changeRoomName(room, groupContent);
         return;
       }
-      // await room.topic('骗了别人买又不玩')
-      // const topic = await room.topic()
-      // console.log("topic ==> " + JSON.stringify(room))
       chatGPTClient.repeatMsg(room, content);
     }
   } else if(room && isImage) {
