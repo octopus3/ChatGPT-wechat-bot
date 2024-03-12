@@ -113,4 +113,37 @@ export default class ChatGPT {
       // }
     }
   }
+
+  // 复读括号消息
+  async repeatMsg(contact, content) {
+    const { id: contactId, imgStr } = contact;
+    const pattern1 = RegExp(`^.+[\(|（]$`);
+    const saveImage = RegExp(`^保存表情`);
+    if(pattern1.test(content)){
+      try {
+        let msg = content.replace(/[\(|（]$/, ")");
+        await contact.say(msg);
+      }catch(e:any) {
+
+      }
+    }else if(saveImage.test(content)) {
+      try {
+        await contact.say("已得到表情包链接\n下载后请自行修改文件后缀\n ------------------\n" + imgStr)
+      }catch(e:any) {
+
+      }
+    }else {
+      return;
+    }
+  }
+
+  async changeRoomName(contact, content) {
+    try {
+      console.log(`${content}`)
+      await contact.topic(content)
+    }catch(e) {
+      console.log("changeName err ==> " + e)
+    }
+
+  }
 }

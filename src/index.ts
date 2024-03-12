@@ -8,6 +8,7 @@ let bot: any = {};
 const startTime = new Date();
 let chatGPTClient: any = null;
 let chatGPTClient4: any = null;
+let imgStr:String = "";
 initProject();
 async function onMessage(msg) {
   // 避免重复发送
@@ -20,10 +21,11 @@ async function onMessage(msg) {
   const room = msg.room();
   const alias = (await contact.alias()) || (await contact.name());
   const isText = msg.type() === bot.Message.Type.Text;
+  const isImage = msg.type() == bot.Message.Type.Image;
   if (msg.self()) {
     return;
   }
-
+  console.log("talk type ==> " + isImage + " msg ==> " + content)
   if (room && isText) {
     const topic = await room.topic();
     console.log(
@@ -46,8 +48,26 @@ async function onMessage(msg) {
           "Content is not within the scope of the customizition format"
         );
       }
+    }else {
+      const pattern1 = RegExp(`^更换群名[\\s]*`);
+      if(pattern1.test(content)) {
+        const groupContent = content.replace(pattern1, "");
+        chatGPTClient.changeRoomName(room, groupContent);
+        return;
+      }
+      // await room.topic('骗了别人买又不玩')
+      // const topic = await room.topic()
+      // console.log("topic ==> " + JSON.stringify(room))
+      chatGPTClient.repeatMsg(room, content);
     }
-  } else if (isText) {
+  } else if(room && isImage) {
+    let regPatternt = /cdnurl[\s]*=[\s]*"(.*?)"/;
+    if(content.match(regPatternt)) {
+      imgStr = content.match(regPatternt)[1]
+      imgStr = imgStr.replace(/&amp;amp;/g, "&")
+      room.imgStr = imgStr
+    }
+  }else if (isText) {
     console.log(`talker: ${alias} content: ${content}`);
     if (content.startsWith(config.privateKey) || config.privateKey === "") {
       let privateContent = content;
@@ -60,11 +80,17 @@ async function onMessage(msg) {
           chatGPTClient.replyMessage(contact, privateContent);
         }
       }
-
     } else {
       console.log(
         "Content is not within the scope of the customizition format"
       );
+    }
+  }else if(isImage) {
+    let regPatternt = /cdnurl[\s]*=[\s]*"(.*?)"/;
+    if(content.match(regPatternt)) {
+      imgStr = content.match(regPatternt)[1]
+      imgStr = imgStr.replace(/&amp;amp;/g, "&")
+      contact.imgStr = imgStr
     }
   }
 }
@@ -87,6 +113,10 @@ async function onLogin(user) {
 
 function onLogout(user) {
   console.log(`${user} has logged out`);
+}
+
+function onPeopleJoin(room, inviteeList, inviter) {
+    // room.say("")
 }
 
 async function initProject() {
