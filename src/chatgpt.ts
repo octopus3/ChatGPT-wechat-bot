@@ -114,12 +114,13 @@ export default class ChatGPT {
     }
   }
 
-  // 复读括号消息
+
   async repeatMsg(contact, content) {
     const { id: contactId, imgStr } = contact;
     const pattern1 = RegExp(`^.+[\(|（]$`);
     const saveImage = RegExp(`^保存表情`);
     if(pattern1.test(content)){
+      // 复读括号消息
       try {
         let msg = content.replace(/[\(|（]$/, ")");
         await contact.say(msg);
@@ -127,6 +128,7 @@ export default class ChatGPT {
 
       }
     }else if(saveImage.test(content)) {
+      // 保存表情包链接
       try {
         await contact.say("已得到表情包链接\n下载后请自行修改文件后缀\n ------------------\n" + imgStr)
       }catch(e:any) {
@@ -135,6 +137,12 @@ export default class ChatGPT {
     }else {
       return;
     }
+  }
+
+  // 私聊
+  async repeatSaveImage(contact) {
+    const { id: contactId, imgStr } = contact;
+    contact.say("已得到表情包链接\n下载后请自行修改文件后缀\n ------------------\n" + imgStr)
   }
 
   async changeRoomName(contact, content) {

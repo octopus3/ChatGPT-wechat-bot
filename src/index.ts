@@ -8,7 +8,7 @@ let bot: any = {};
 const startTime = new Date();
 let chatGPTClient: any = null;
 let chatGPTClient4: any = null;
-let imgStr:String = "";
+
 initProject();
 async function onMessage(msg) {
   // 避免重复发送
@@ -63,6 +63,7 @@ async function onMessage(msg) {
   } else if(room && isImage) {
     let regPatternt = /cdnurl[\s]*=[\s]*"(.*?)"/;
     if(content.match(regPatternt)) {
+      let imgStr:String = "";
       imgStr = content.match(regPatternt)[1]
       imgStr = imgStr.replace(/&amp;amp;/g, "&")
       room.imgStr = imgStr
@@ -88,9 +89,11 @@ async function onMessage(msg) {
   }else if(isImage) {
     let regPatternt = /cdnurl[\s]*=[\s]*"(.*?)"/;
     if(content.match(regPatternt)) {
+      let imgStr:String = "";
       imgStr = content.match(regPatternt)[1]
       imgStr = imgStr.replace(/&amp;amp;/g, "&")
       contact.imgStr = imgStr
+      chatGPTClient.repeatSaveImage(contact)
     }
   }
 }
