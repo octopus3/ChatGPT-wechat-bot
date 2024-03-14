@@ -22,10 +22,12 @@ async function onMessage(msg) {
   const alias = (await contact.alias()) || (await contact.name());
   const isText = msg.type() === bot.Message.Type.Text;
   const isImage = msg.type() == bot.Message.Type.Image;
+  const isAttachment = msg.type() == bot.Message.Type.Attachment;
   if (msg.self()) {
     return;
   }
-  console.log("talk type ==> " + isImage + " msg ==> " + content)
+  console.log("talk type ==> " + msg.type() + " msg ==> " + content)
+  console.log("bot.Message.Type ==> " + JSON.stringify(bot.Message.Type));
   if (room && isText) {
     const topic = await room.topic();
     console.log(
@@ -62,11 +64,24 @@ async function onMessage(msg) {
     }
   } else if(room && isImage) {
     let regPatternt = /cdnurl[\s]*=[\s]*"(.*?)"/;
+
     if(content.match(regPatternt)) {
       let imgStr:String = "";
       imgStr = content.match(regPatternt)[1]
       imgStr = imgStr.replace(/&amp;amp;/g, "&")
       room.imgStr = imgStr
+    }else {
+      room.imgStr = ""
+    }
+  }else if(room && isAttachment) {
+    let regPatternt1 = /https:\/\/b23\.tv[^<]+&lt;\/url&gt;/;
+    if(content.match(regPatternt1)) {
+      let bvStrUrl = content.match(regPatternt1)[0]
+      bvStrUrl = bvStrUrl.replace(/&amp;amp;/g, "&")
+      console.log("bvStrUrl ==> " + bvStrUrl)
+      room.bvStrUrl = bvStrUrl
+    }else {
+      room.bvStrUrl = ""
     }
   }else if (isText) {
     console.log(`talker: ${alias} content: ${content}`);
@@ -91,12 +106,28 @@ async function onMessage(msg) {
     }
   }else if(isImage) {
     let regPatternt = /cdnurl[\s]*=[\s]*"(.*?)"/;
+
     if(content.match(regPatternt)) {
       let imgStr:String = "";
       imgStr = content.match(regPatternt)[1]
       imgStr = imgStr.replace(/&amp;amp;/g, "&")
       contact.imgStr = imgStr
       chatGPTClient.repeatSaveImage(contact)
+    }else {
+      contact.imgStr = ""
+    }
+
+  }else if(isAttachment) {
+    let regPatternt1 = /https:\/\/b23\.tv[^<]+&lt;\/url&gt;/;
+    if(content.match(regPatternt1)) {
+      let bvStrUrl = content.match(regPatternt1)[0]
+      console.log("bvStrUrl ==> " + bvStrUrl)
+      bvStrUrl = bvStrUrl.replace(/&amp;amp;/g, "&")
+      bvStrUrl = bvStrUrl.replace('&lt;\/url&gt;', "")
+      contact.bvStrUrl = bvStrUrl
+      chatGPTClient.getShare2BV(contact)
+    }else {
+      contact.bvStrUrl = ""
     }
   }
 }
