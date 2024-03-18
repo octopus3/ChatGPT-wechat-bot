@@ -26,8 +26,8 @@ async function onMessage(msg) {
   if (msg.self()) {
     return;
   }
-  console.log("talk type ==> " + msg.type() + " msg ==> " + content)
-  console.log("bot.Message.Type ==> " + JSON.stringify(bot.Message.Type));
+  // console.log("talk type ==> " + msg.type() + " msg ==> " + content)
+  // console.log("bot.Message.Type ==> " + JSON.stringify(bot.Message.Type));
   if (room && isText) {
     const topic = await room.topic();
     console.log(
@@ -78,6 +78,7 @@ async function onMessage(msg) {
     if(content.match(regPatternt1)) {
       let bvStrUrl = content.match(regPatternt1)[0]
       bvStrUrl = bvStrUrl.replace(/&amp;amp;/g, "&")
+      bvStrUrl = bvStrUrl.replace('&lt;\/url&gt;', "")
       console.log("bvStrUrl ==> " + bvStrUrl)
       room.bvStrUrl = bvStrUrl
     }else {

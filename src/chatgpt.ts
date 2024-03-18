@@ -132,6 +132,7 @@ export default class ChatGPT {
     const pattern1 = RegExp(`^.+[\(|（]$`);
     const saveImage = RegExp(`^保存表情`);
     const summaryVideo = RegExp(`^总结视频`);
+    const bvSummary = RegExp(`^bv号总结[\\s]*`)
     if(pattern1.test(content)){
       // 复读括号消息
       try {
@@ -158,6 +159,17 @@ export default class ChatGPT {
           await contact.say("该视频内容无法总结")
         }else {
           this.getShare2BV(contact)
+        }
+      }catch(e) {
+
+      }
+    }else if(bvSummary.test(content)) {
+      try {
+        let contents = content.replace(bvSummary, "");
+        if(contents.test(/BV.*/)) {
+
+        }else {
+          contact.say("请输入正确的bv号")
         }
       }catch(e) {
 
@@ -198,9 +210,9 @@ export default class ChatGPT {
     }).then(res => {
       res.text().then(res1 => {
         let matchResult = res1.match(/content="https:\/\/www.bilibili.com\/video\/([^/]+)\/"/)
+        console.log("bvid ==> " + matchResult)
         if (matchResult) {
           let bvid = matchResult[1]
-          console.log("bvid ==> " + bvid)
           this.summaryFetch(bvid, contact)
         }
       })
@@ -280,12 +292,12 @@ export default class ChatGPT {
                           console.log("fetch message ==> " + JSON.stringify(message.choices))
                           if ((contact.topic && contact?.topic() && config.groupReplyMode) || (!contact.topic && config.privateReplyMode)) {
                             let content = message.choices[0].message.content
-                            const result = "总结内容如下：" + `\n这个视频的作者是${owner.name}\n是${tname}类型的视频\n标题为${title}\n简介为${desc}` + "\n-----------\n" + content;
+                            const result = `\n这个视频的作者：${owner.name}\n标题：${title}\n简介：${desc}` + "总结内容如下：" + "\n-----------\n" + content;
                             contact.say(result);
                             return;
                           } else {
                             let content = message.choices[0].message.content
-                            const result = "总结内容如下：" + `\n这个视频的作者是${owner.name}\n是${tname}类型的视频\n标题为${title}\n简介为${desc}` + "\n-----------\n" + content;
+                            const result = `\n这个视频的作者：${owner.name}\n标题：${title}\n简介：${desc}` + "总结内容如下：" + "\n-----------\n" + content;
                             contact.say(result);
                           }
                       })
@@ -294,7 +306,7 @@ export default class ChatGPT {
                 })
               } else {
                 console.log("该BV号视频总结功能不适用")
-                contact.say("该BV号视频总结功能不适用");
+                contact.say(`\n这个视频的作者：${owner.name}\n标题：${title}\n简介：${desc}\n` + "\n-----------\n" + "该视频总结功能不适用");
               }
             })
           })
