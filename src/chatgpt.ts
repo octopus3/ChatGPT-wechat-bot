@@ -1,9 +1,13 @@
 import { ChatGPTClient } from "@waylaidwanderer/chatgpt-api";
 import fetch from 'node-fetch';
 import config from "./config.js";
+import puppeteer from 'puppeteer'
+import fs from 'fs';
+import path from 'path';
+let pathName = path.join(__dirname, `steamData.txt`)
 const bili_ticket = 'eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTA1NjI2OTUsImlhdCI6MTcxMDMwMzQzNSwicGx0IjotMX0.xYnAM_9zoF5lp9RNgZK695uG4ef8zODXN-v3e5-j9s0'
 const SESSDATA = '34a54340%2C1725855486%2Cdb7f7%2A31CjDRwIgchKMBgMzdNUcXEKFAtFcNdY9nW1STV9E2GxzY5kSD8HUZlZaqemMuqykz8i8SVmhHRGJRZXRaUm5pVUdyX0VINGFQZXMwd0NyZ0NPdFQycmJpVWxsc0RJUlViZ2ozVTZ4Y0k0T3lxamNfazFPNk1ieURyOGVLUFpQejd4WEk5WG94dmFRIIEC'
-
+let browser;
 const clientOptions = {
   // (Optional) Support for a reverse proxy for the completions endpoint (private API server).
   // Warning: This will expose your `openaiApiKey` to a third party. Consider the risks before using this.
@@ -40,7 +44,8 @@ const cacheOptions = {
   // For example, to use a JSON file (`npm i keyv-file`) as a database:
   // store: new KeyvFile({ filename: 'cache.json' }),
 };
-
+const cmd = [`保存表情`, `总结视频`, `bv号总结[\\s]*`, `查看指令`];
+const speakRuler = [`.+(\\(|（)$`];
 export default class ChatGPT {
   private chatGPT: any;
   private chatOption: any;
@@ -129,10 +134,13 @@ export default class ChatGPT {
 
   async repeatMsg(contact, content) {
     const { id: contactId, imgStr, bvStrUrl } = contact;
-    const pattern1 = RegExp(`^.+[\(|（]$`);
+    const pattern1 = RegExp(`.+(\\(|（)$`);
     const saveImage = RegExp(`^保存表情`);
     const summaryVideo = RegExp(`^总结视频`);
-    const bvSummary = RegExp(`^bv号总结[\\s]*`)
+    const bvSummary = RegExp(`^bv号总结[\\s]*`);
+    const steamChecker = RegExp(`谁在玩游戏`);
+    const steamBind = RegExp(`^绑定steam[\\s]*`)
+    const steamNotBind = RegExp(`^解除绑定steam[\\s]*`)
     if(pattern1.test(content)){
       // 复读括号消息
       try {
@@ -167,12 +175,32 @@ export default class ChatGPT {
       try {
         let contents = content.replace(bvSummary, "");
         if(contents.test(/BV.*/)) {
-
+          this.getShare2BV(contents)
         }else {
           contact.say("请输入正确的bv号")
         }
       }catch(e) {
 
+      }
+    }else if(steamChecker.test(content)) {
+      try {
+        readSteamId(contact)
+      }catch(e) {
+        console.log('error ==> ' + e)
+      }
+    }else if(steamBind.test(content)) {
+      let contents = content.replace(steamBind, "");
+      if(contents.match(/^765611.*/) && contents.length == 17) {
+        readSteamFile(contents, true)
+      }else {
+        contact.say("steamId格式错误无法绑定")
+      }
+    }else if(steamNotBind.test(content)) {
+      let contents = content.replace(steamNotBind, "");
+      if(contents.match(/^765611.*/) && contents.length == 17) {
+        readSteamFile(contents, false)
+      }else {
+        contact.say("你在耍我吗？")
       }
     }else {
       return;
@@ -199,7 +227,7 @@ export default class ChatGPT {
 
   }
 
-  // // 视频总结
+  // 视频总结
   getShare2BV(contact) {
     const { id: contactId, bvStrUrl } = contact;
     fetch(bvStrUrl, {
@@ -292,12 +320,12 @@ export default class ChatGPT {
                           console.log("fetch message ==> " + JSON.stringify(message.choices))
                           if ((contact.topic && contact?.topic() && config.groupReplyMode) || (!contact.topic && config.privateReplyMode)) {
                             let content = message.choices[0].message.content
-                            const result = `\n这个视频的作者：${owner.name}\n标题：${title}\n简介：${desc}` + "总结内容如下：" + "\n-----------\n" + content;
+                            const result = `标题：${title}\n作者：${owner.name}\n简介：${desc}\n` + "总结内容如下：" + "\n-----------\n" + content;
                             contact.say(result);
                             return;
                           } else {
                             let content = message.choices[0].message.content
-                            const result = `\n这个视频的作者：${owner.name}\n标题：${title}\n简介：${desc}` + "总结内容如下：" + "\n-----------\n" + content;
+                            const result = `标题：${title}\n作者：${owner.name}\n简介：${desc}\n` + "总结内容如下：" + "\n-----------\n" + content;
                             contact.say(result);
                           }
                       })
@@ -306,7 +334,7 @@ export default class ChatGPT {
                 })
               } else {
                 console.log("该BV号视频总结功能不适用")
-                contact.say(`\n这个视频的作者：${owner.name}\n标题：${title}\n简介：${desc}\n` + "\n-----------\n" + "该视频总结功能不适用");
+                contact.say(`标题：${title}\n作者：${owner.name}\n简介：${desc}` + "\n-----------\n" + "该视频总结功能不适用");
               }
             })
           })
@@ -323,3 +351,139 @@ const secondsToMinutesAndSeconds = (seconds) => {
   var remainingSeconds = Math.round(seconds % 60);
   return minutes + "分" + remainingSeconds + "秒";
 };
+
+
+function writeSteamId(steamId) {
+  if (fs.existsSync(pathName)) {
+    let str = "," + steamId
+    fs.appendFile(pathName, str, function (err) {
+      if (err) {
+        return console.log(err);
+      }
+      console.log("The file was appended!");
+    })
+  } else {
+    fs.writeFile(pathName, steamId, function (err) {
+      if (err) {
+        return console.log(err);
+      }
+      console.log("The file was saved!");
+    })
+  }
+}
+
+function readSteamFile(steamId, isAdd) {
+  if (fs.existsSync(pathName)) {
+    fs.readFile(pathName, "utf8", async (errRead, data) => {
+      if(errRead) {
+        return console.log(errRead)
+      }
+      let steamIdSets = data.split(",")
+      if(isAdd) {
+        steamIdSets.forEach(item => {
+          // 绑定操作并且绑定过了
+          if(item == steamId) {
+            return false;
+          }else {
+            writeSteamId(steamId)
+          }
+        })
+      }else {
+        let newArr = steamIdSets.map(item => {
+          if(item != steamId) {
+            return item
+          }
+        })
+        writeSteamId2Array(newArr)
+      }
+
+    })
+  } else {
+    writeSteamId(steamId)
+  }
+}
+
+function readSteamId(contact) {
+  if (fs.existsSync(pathName)) {
+    fs.readFile(pathName, "utf8", async (errRead, data) => {
+      if(errRead) {
+        return console.log(errRead)
+      }
+      console.log("data ==> ", data.split(","))
+      let repeatMsg = ""
+      browser = await puppeteer.launch({
+        args: [`--proxy-server=127.0.0.1:7890`]
+      })
+      let steamIdSets = data.split(",")
+      let userArr:any = []
+      const pages = await Promise.all(steamIdSets.map(async (steamId) => {
+        const page = await browser.newPage()
+        await page.goto('https://steamcommunity.com/profiles/' + steamId)
+        return page
+      }))
+      for(const page of pages) {
+        await page.bringToFront()
+        let userObj = {name: '', status: '', playing: ''}
+        let nameElement = await page.$(".actual_persona_name")
+        let name = await page.evaluate(el => {
+          return {
+            "text": el.textContent,
+            "className": el.className
+          }
+        }, nameElement)
+        userObj.name = name.text.trim()
+        let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
+
+        for (let element of elements) {
+          const elObj = await page.evaluate(
+            el => {
+              return {
+                "text": el.textContent,
+                "className": el.className
+              }
+            },
+            element);
+            if(elObj.className == 'actual_persona_name') {
+              userObj.name = elObj.text.trim()
+            }else if(elObj.className == 'profile_in_game_name') {
+              userObj.playing = elObj.text.trim()
+            }else if(elObj.className == "profile_in_game_header") {
+              userObj.status = elObj.text.trim()
+            }
+          console.log( elObj.className + " ==> " + elObj.text.trim());
+          // console.log("obj ==> ", userObj)
+        }
+        page.close()
+        userArr.push(userObj)
+      }
+      browser.close()
+      userArr.forEach(item => {
+        if(item.playing) {
+          if(repeatMsg == '') {
+            repeatMsg += item.name + "正在玩:" + item.playing
+          }else {
+            repeatMsg += '\n' + item.name + "正在玩:" + item.playing
+          }
+        }
+      })
+      contact.say(repeatMsg)
+    })
+  }
+}
+
+function writeSteamId2Array(array) {
+  let list = ''
+  array.forEach(item => {
+    if(list == '') {
+      list += item
+    }else {
+      list += "," + item
+    }
+  })
+  fs.writeFile(pathName, list, function (err) {
+    if (err) {
+      return console.log(err);
+    }
+    console.log("The file was saved!");
+  })
+}
