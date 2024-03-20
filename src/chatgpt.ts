@@ -7,7 +7,7 @@ import path from 'path';
 import {fileURLToPath} from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-let pathName = path.join(__dirname, `steamData.txt`)
+let pathName = path.join(__dirname, '..', `steamData.txt`)
 const bili_ticket = 'eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTA1NjI2OTUsImlhdCI6MTcxMDMwMzQzNSwicGx0IjotMX0.xYnAM_9zoF5lp9RNgZK695uG4ef8zODXN-v3e5-j9s0'
 const SESSDATA = '34a54340%2C1725855486%2Cdb7f7%2A31CjDRwIgchKMBgMzdNUcXEKFAtFcNdY9nW1STV9E2GxzY5kSD8HUZlZaqemMuqykz8i8SVmhHRGJRZXRaUm5pVUdyX0VINGFQZXMwd0NyZ0NPdFQycmJpVWxsc0RJUlViZ2ozVTZ4Y0k0T3lxamNfazFPNk1ieURyOGVLUFpQejd4WEk5WG94dmFRIIEC'
 let browser;
@@ -194,14 +194,14 @@ export default class ChatGPT {
     }else if(steamBind.test(content)) {
       let contents = content.replace(steamBind, "");
       if(contents.match(/^765611.*/) && contents.length == 17) {
-        readSteamFile(contents, true)
+        readSteamFile(contents, true, contact)
       }else {
         contact.say("steamId格式错误无法绑定")
       }
     }else if(steamNotBind.test(content)) {
       let contents = content.replace(steamNotBind, "");
       if(contents.match(/^765611.*/) && contents.length == 17) {
-        readSteamFile(contents, false)
+        readSteamFile(contents, false, contact)
       }else {
         contact.say("你在耍我吗？")
       }
@@ -356,7 +356,7 @@ const secondsToMinutesAndSeconds = (seconds) => {
 };
 
 
-function writeSteamId(steamId) {
+function writeSteamId(steamId, contact) {
   if (fs.existsSync(pathName)) {
     let str = "," + steamId
     fs.appendFile(pathName, str, function (err) {
@@ -364,6 +364,7 @@ function writeSteamId(steamId) {
         return console.log(err);
       }
       console.log("The file was appended!");
+      contact.say('绑定成功')
     })
   } else {
     fs.writeFile(pathName, steamId, function (err) {
@@ -371,11 +372,12 @@ function writeSteamId(steamId) {
         return console.log(err);
       }
       console.log("The file was saved!");
+      contact.say('绑定成功')
     })
   }
 }
 
-function readSteamFile(steamId, isAdd) {
+function readSteamFile(steamId, isAdd, contact) {
   if (fs.existsSync(pathName)) {
     fs.readFile(pathName, "utf8", async (errRead, data) => {
       if(errRead) {
@@ -386,9 +388,10 @@ function readSteamFile(steamId, isAdd) {
         steamIdSets.forEach(item => {
           // 绑定操作并且绑定过了
           if(item == steamId) {
+            contact.say("已经绑定过了")
             return false;
           }else {
-            writeSteamId(steamId)
+            writeSteamId(steamId, contact)
           }
         })
       }else {
@@ -402,7 +405,7 @@ function readSteamFile(steamId, isAdd) {
 
     })
   } else {
-    writeSteamId(steamId)
+    writeSteamId(steamId, contact)
   }
 }
 
@@ -419,59 +422,66 @@ function readSteamId(contact) {
           args: [`--proxy-server=127.0.0.1:7890`]
         })
         let steamIdSets = data.split(",")
-        let userArr:any = []
-        const pages = await Promise.all(steamIdSets.map(async (steamId) => {
-          const page = await browser.newPage()
-          await page.goto('https://steamcommunity.com/profiles/' + steamId)
-          return page
-        }))
-        for(const page of pages) {
-          await page.bringToFront()
-          let userObj = {name: '', status: '', playing: ''}
-          let nameElement = await page.$(".actual_persona_name")
-          let name = await page.evaluate(el => {
-            return {
-              "text": el.textContent,
-              "className": el.className
-            }
-          }, nameElement)
-          userObj.name = name.text.trim()
-          let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
-
-          for (let element of elements) {
-            const elObj = await page.evaluate(
-              el => {
-                return {
-                  "text": el.textContent,
-                  "className": el.className
-                }
-              },
-              element);
-              if(elObj.className == 'actual_persona_name') {
-                userObj.name = elObj.text.trim()
-              }else if(elObj.className == 'profile_in_game_name') {
-                userObj.playing = elObj.text.trim()
-              }else if(elObj.className == "profile_in_game_header") {
-                userObj.status = elObj.text.trim()
+        if(steamIdSets.length > 0) {
+          let userArr:any = []
+          const pages = await Promise.all(steamIdSets.map(async (steamId) => {
+            const page = await browser.newPage()
+            await page.goto('https://steamcommunity.com/profiles/' + steamId)
+            return page
+          }))
+          for(const page of pages) {
+            await page.bringToFront()
+            let userObj = {name: '', status: '', playing: ''}
+            let nameElement = await page.$(".actual_persona_name")
+            let name = await page.evaluate(el => {
+              return {
+                "text": el.textContent,
+                "className": el.className
               }
-            console.log( elObj.className + " ==> " + elObj.text.trim());
-            // console.log("obj ==> ", userObj)
-          }
-          page.close()
-          userArr.push(userObj)
-        }
-        browser.close()
-        userArr.forEach(item => {
-          if(item.playing) {
-            if(repeatMsg == '') {
-              repeatMsg += item.name + "正在玩:" + item.playing
-            }else {
-              repeatMsg += '\n' + item.name + "正在玩:" + item.playing
+            }, nameElement)
+            userObj.name = name.text.trim()
+            let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
+
+            for (let element of elements) {
+              const elObj = await page.evaluate(
+                el => {
+                  return {
+                    "text": el.textContent,
+                    "className": el.className
+                  }
+                },
+                element);
+                if(elObj.className == 'actual_persona_name') {
+                  userObj.name = elObj.text.trim()
+                }else if(elObj.className == 'profile_in_game_name') {
+                  userObj.playing = elObj.text.trim()
+                }else if(elObj.className == "profile_in_game_header") {
+                  userObj.status = elObj.text.trim()
+                }
+              console.log( elObj.className + " ==> " + elObj.text.trim());
+              // console.log("obj ==> ", userObj)
             }
+            page.close()
+            userArr.push(userObj)
           }
-        })
-        contact.say(repeatMsg)
+          browser.close()
+          userArr.forEach(item => {
+            if(item.playing) {
+              if(repeatMsg == '') {
+                repeatMsg += item.name + "正在玩:" + item.playing
+              }else {
+                repeatMsg += '\n' + item.name + "正在玩:" + item.playing
+              }
+            }
+          })
+          if(repeatMsg != '') {
+            contact.say(repeatMsg)
+          }else {
+            contact.say("没有人在玩")
+          }
+        }
       }catch(e) {
+        console.log('e ==> ' + e)
         contact.say("看不到谁在玩捏")
       }
 
@@ -488,6 +498,9 @@ function writeSteamId2Array(array) {
       list += "," + item
     }
   })
+  if(list == 'undefined') {
+    list = ''
+  }
   fs.writeFile(pathName, list, function (err) {
     if (err) {
       return console.log(err);

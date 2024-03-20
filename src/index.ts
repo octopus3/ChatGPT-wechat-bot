@@ -22,6 +22,7 @@ async function onMessage(msg) {
   const alias = (await contact.alias()) || (await contact.name());
   const isText = msg.type() === bot.Message.Type.Text;
   const isImage = msg.type() == bot.Message.Type.Image;
+  // const isMentionSelf = content.includes(`@知鸟不咕更`)
   const isAttachment = msg.type() == bot.Message.Type.Attachment;
   if (msg.self()) {
     return;
@@ -30,10 +31,10 @@ async function onMessage(msg) {
   // console.log("bot.Message.Type ==> " + JSON.stringify(bot.Message.Type));
   if (room && isText) {
     const topic = await room.topic();
+    console.log("msg ==> " + msg.room() + " msg ==> " + JSON.stringify(msg))
     console.log(
-      `Group name: ${topic} talker: ${await contact.name()} content: ${content}`
+      `Group name: ${topic} talker: ${await alias} content: ${content}`
     );
-
     const pattern = RegExp(`^@${receiver.name()}\\s+${config.groupKey}[\\s]*`);
     const pattern4 = RegExp(`^@${receiver.name()}\\s+GPT4[\\s]*`);
     if (await msg.mentionSelf()) {
