@@ -4,6 +4,9 @@ import config from "./config.js";
 import puppeteer from 'puppeteer'
 import fs from 'fs';
 import path from 'path';
+import {fileURLToPath} from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 let pathName = path.join(__dirname, `steamData.txt`)
 const bili_ticket = 'eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTA1NjI2OTUsImlhdCI6MTcxMDMwMzQzNSwicGx0IjotMX0.xYnAM_9zoF5lp9RNgZK695uG4ef8zODXN-v3e5-j9s0'
 const SESSDATA = '34a54340%2C1725855486%2Cdb7f7%2A31CjDRwIgchKMBgMzdNUcXEKFAtFcNdY9nW1STV9E2GxzY5kSD8HUZlZaqemMuqykz8i8SVmhHRGJRZXRaUm5pVUdyX0VINGFQZXMwd0NyZ0NPdFQycmJpVWxsc0RJUlViZ2ozVTZ4Y0k0T3lxamNfazFPNk1ieURyOGVLUFpQejd4WEk5WG94dmFRIIEC'
@@ -140,7 +143,7 @@ export default class ChatGPT {
     const bvSummary = RegExp(`^bv号总结[\\s]*`);
     const steamChecker = RegExp(`谁在玩游戏`);
     const steamBind = RegExp(`^绑定steam[\\s]*`)
-    const steamNotBind = RegExp(`^解除绑定steam[\\s]*`)
+    const steamNotBind = RegExp(`^解绑steam[\\s]*`)
     if(pattern1.test(content)){
       // 复读括号消息
       try {
@@ -411,62 +414,67 @@ function readSteamId(contact) {
       }
       console.log("data ==> ", data.split(","))
       let repeatMsg = ""
-      browser = await puppeteer.launch({
-        args: [`--proxy-server=127.0.0.1:7890`]
-      })
-      let steamIdSets = data.split(",")
-      let userArr:any = []
-      const pages = await Promise.all(steamIdSets.map(async (steamId) => {
-        const page = await browser.newPage()
-        await page.goto('https://steamcommunity.com/profiles/' + steamId)
-        return page
-      }))
-      for(const page of pages) {
-        await page.bringToFront()
-        let userObj = {name: '', status: '', playing: ''}
-        let nameElement = await page.$(".actual_persona_name")
-        let name = await page.evaluate(el => {
-          return {
-            "text": el.textContent,
-            "className": el.className
-          }
-        }, nameElement)
-        userObj.name = name.text.trim()
-        let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
-
-        for (let element of elements) {
-          const elObj = await page.evaluate(
-            el => {
-              return {
-                "text": el.textContent,
-                "className": el.className
-              }
-            },
-            element);
-            if(elObj.className == 'actual_persona_name') {
-              userObj.name = elObj.text.trim()
-            }else if(elObj.className == 'profile_in_game_name') {
-              userObj.playing = elObj.text.trim()
-            }else if(elObj.className == "profile_in_game_header") {
-              userObj.status = elObj.text.trim()
+      try {
+        browser = await puppeteer.launch({
+          args: [`--proxy-server=127.0.0.1:7890`]
+        })
+        let steamIdSets = data.split(",")
+        let userArr:any = []
+        const pages = await Promise.all(steamIdSets.map(async (steamId) => {
+          const page = await browser.newPage()
+          await page.goto('https://steamcommunity.com/profiles/' + steamId)
+          return page
+        }))
+        for(const page of pages) {
+          await page.bringToFront()
+          let userObj = {name: '', status: '', playing: ''}
+          let nameElement = await page.$(".actual_persona_name")
+          let name = await page.evaluate(el => {
+            return {
+              "text": el.textContent,
+              "className": el.className
             }
-          console.log( elObj.className + " ==> " + elObj.text.trim());
-          // console.log("obj ==> ", userObj)
-        }
-        page.close()
-        userArr.push(userObj)
-      }
-      browser.close()
-      userArr.forEach(item => {
-        if(item.playing) {
-          if(repeatMsg == '') {
-            repeatMsg += item.name + "正在玩:" + item.playing
-          }else {
-            repeatMsg += '\n' + item.name + "正在玩:" + item.playing
+          }, nameElement)
+          userObj.name = name.text.trim()
+          let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
+
+          for (let element of elements) {
+            const elObj = await page.evaluate(
+              el => {
+                return {
+                  "text": el.textContent,
+                  "className": el.className
+                }
+              },
+              element);
+              if(elObj.className == 'actual_persona_name') {
+                userObj.name = elObj.text.trim()
+              }else if(elObj.className == 'profile_in_game_name') {
+                userObj.playing = elObj.text.trim()
+              }else if(elObj.className == "profile_in_game_header") {
+                userObj.status = elObj.text.trim()
+              }
+            console.log( elObj.className + " ==> " + elObj.text.trim());
+            // console.log("obj ==> ", userObj)
           }
+          page.close()
+          userArr.push(userObj)
         }
-      })
-      contact.say(repeatMsg)
+        browser.close()
+        userArr.forEach(item => {
+          if(item.playing) {
+            if(repeatMsg == '') {
+              repeatMsg += item.name + "正在玩:" + item.playing
+            }else {
+              repeatMsg += '\n' + item.name + "正在玩:" + item.playing
+            }
+          }
+        })
+        contact.say(repeatMsg)
+      }catch(e) {
+        contact.say("看不到谁在玩捏")
+      }
+
     })
   }
 }
