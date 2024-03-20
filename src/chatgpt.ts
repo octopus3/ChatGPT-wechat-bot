@@ -8,8 +8,8 @@ import {fileURLToPath} from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 let pathName = path.join(__dirname, '..', `steamData.txt`)
-const bili_ticket = 'eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTA1NjI2OTUsImlhdCI6MTcxMDMwMzQzNSwicGx0IjotMX0.xYnAM_9zoF5lp9RNgZK695uG4ef8zODXN-v3e5-j9s0'
-const SESSDATA = '34a54340%2C1725855486%2Cdb7f7%2A31CjDRwIgchKMBgMzdNUcXEKFAtFcNdY9nW1STV9E2GxzY5kSD8HUZlZaqemMuqykz8i8SVmhHRGJRZXRaUm5pVUdyX0VINGFQZXMwd0NyZ0NPdFQycmJpVWxsc0RJUlViZ2ozVTZ4Y0k0T3lxamNfazFPNk1ieURyOGVLUFpQejd4WEk5WG94dmFRIIEC'
+const bili_ticket = 'eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTA5OTg2MTksImlhdCI6MTcxMDczOTM1OSwicGx0IjotMX0.4l_XqF_s7a1DIHnyRivT-hpPIRH4q8IjHRbL5w846wk'
+const SESSDATA = '2c81e346%2C1726291421%2Cc325b%2A31CjCkUp7FiXvSvUF5fwmMQQjtRKvymI6IXPX1kvQmkEuaekVrrYxhUenuF1F8iJdvpR0SVmt4b3I4N2RjMmZxWktSZDBKLXRNV09ybmhRd1ZkQ2FITTBOWl9ZVHFrMk1XeGVXYS16LTFqVVNhWmx2VkJxV2RsOTVnOUxsbjF0WHd1NldFWTBuVTdnIIEC'
 let browser;
 const clientOptions = {
   // (Optional) Support for a reverse proxy for the completions endpoint (private API server).
@@ -135,15 +135,15 @@ export default class ChatGPT {
   }
 
 
-  async repeatMsg(contact, content) {
+  async repeatMsg(contact, content, alias) {
     const { id: contactId, imgStr, bvStrUrl } = contact;
     const pattern1 = RegExp(`.+(\\(|（)$`);
     const saveImage = RegExp(`^保存表情`);
     const summaryVideo = RegExp(`^总结视频`);
     const bvSummary = RegExp(`^bv号总结[\\s]*`);
-    const steamChecker = RegExp(`谁在玩游戏`);
+    const steamChecker = RegExp(`^谁在玩游戏`);
     const steamBind = RegExp(`^绑定steam[\\s]*`)
-    const steamNotBind = RegExp(`^解绑steam[\\s]*`)
+    const steamNotBind = RegExp(`^解绑steam*`)
     if(pattern1.test(content)){
       // 复读括号消息
       try {
@@ -194,17 +194,13 @@ export default class ChatGPT {
     }else if(steamBind.test(content)) {
       let contents = content.replace(steamBind, "");
       if(contents.match(/^765611.*/) && contents.length == 17) {
-        readSteamFile(contents, true, contact)
+        readSteamFile(contents, true, contact, alias)
       }else {
         contact.say("steamId格式错误无法绑定")
       }
     }else if(steamNotBind.test(content)) {
       let contents = content.replace(steamNotBind, "");
-      if(contents.match(/^765611.*/) && contents.length == 17) {
-        readSteamFile(contents, false, contact)
-      }else {
-        contact.say("你在耍我吗？")
-      }
+      readSteamFile(contents, false, contact, alias)
     }else {
       return;
     }
@@ -356,14 +352,22 @@ const secondsToMinutesAndSeconds = (seconds) => {
 };
 
 
-function writeSteamId(steamId, contact) {
+async function writeSteamId(steamId, contact, name, readFileData) {
+  let roomName = await contact.topic()
   if (fs.existsSync(pathName)) {
-    let str = "," + steamId
-    fs.appendFile(pathName, str, function (err) {
+    console.log("readFileData ==> " + readFileData);
+    let str = readFileData
+    if(str == '') {
+      str = roomName + ":" + name + ':' + steamId.replace("\n", "")
+    }else {
+      str += "," + roomName + ":" + name + ":" + steamId.replace("\n", "")
+    }
+
+    fs.writeFile(pathName, str, function (err) {
       if (err) {
         return console.log(err);
       }
-      console.log("The file was appended!");
+      console.log("写入成功");
       contact.say('绑定成功')
     })
   } else {
@@ -377,39 +381,59 @@ function writeSteamId(steamId, contact) {
   }
 }
 
-function readSteamFile(steamId, isAdd, contact) {
+function readSteamFile(steamId, isAdd, contact, name) {
   if (fs.existsSync(pathName)) {
     fs.readFile(pathName, "utf8", async (errRead, data) => {
       if(errRead) {
         return console.log(errRead)
       }
-      let steamIdSets = data.split(",")
-      if(isAdd) {
-        steamIdSets.forEach(item => {
-          // 绑定操作并且绑定过了
-          if(item == steamId) {
-            contact.say("已经绑定过了")
-            return false;
+      try {
+        let topicName = await contact.topic();
+        let steamIdSets = data.split(",")
+        if(isAdd) {
+          for(let i = 0; i < steamIdSets.length; i ++) {
+            let item = steamIdSets[i];
+            let newArr = item.split(":")
+             // 绑定操作并且绑定过了
+            if(newArr[0] == topicName && newArr[2] == steamId) {
+              contact.say("已经绑定过了")
+              return false;
+            }else {
+              writeSteamId(steamId, contact, name, data)
+              return
+            }
+          }
+        }else {
+          let result = steamIdSets.filter(item => {
+            let newArr = item.split(":")
+            if(topicName == newArr[0] && name == newArr[1]) {
+                return true
+            }
+            return false
+          })
+          if(result.length > 0) {
+            let index = steamIdSets.findIndex(item => item == result[0])
+            if(index != -1) {
+              steamIdSets.splice(index, 1)
+              console.log("result noadd ==> ", result)
+              writeSteamId2Array(steamIdSets)
+            }
           }else {
-            writeSteamId(steamId, contact)
+            contact.say("你根本没有绑定！");
           }
-        })
-      }else {
-        let newArr = steamIdSets.map(item => {
-          if(item != steamId) {
-            return item
-          }
-        })
-        writeSteamId2Array(newArr)
-      }
 
+        }
+      }catch(e) {
+        console.log('readSteamFile error ==> ' + e)
+      }
     })
   } else {
-    writeSteamId(steamId, contact)
+    writeSteamId(steamId, contact, name, '')
   }
 }
 
-function readSteamId(contact) {
+async function readSteamId(contact) {
+  let roomName = await contact.topic()
   if (fs.existsSync(pathName)) {
     fs.readFile(pathName, "utf8", async (errRead, data) => {
       if(errRead) {
@@ -422,16 +446,23 @@ function readSteamId(contact) {
           args: [`--proxy-server=127.0.0.1:7890`]
         })
         let steamIdSets = data.split(",")
+
         if(steamIdSets.length > 0) {
           let userArr:any = []
           const pages = await Promise.all(steamIdSets.map(async (steamId) => {
+            console.log("steamId ==> ", steamId);
+            let userObj = {name: '', status: '', playing: '', wechatName: "", topic: ""}
             const page = await browser.newPage()
-            await page.goto('https://steamcommunity.com/profiles/' + steamId)
+            let userInfo = steamId.split(":")
+            userObj.wechatName = userInfo[1]
+            userObj.topic = userInfo[0]
+            userArr.push(userObj)
+            await page.goto('https://steamcommunity.com/profiles/' + userInfo[2])
             return page
           }))
-          for(const page of pages) {
+          for(const [index, page] of pages.entries()) {
+            let userObj = userArr[index]
             await page.bringToFront()
-            let userObj = {name: '', status: '', playing: ''}
             let nameElement = await page.$(".actual_persona_name")
             let name = await page.evaluate(el => {
               return {
@@ -458,19 +489,21 @@ function readSteamId(contact) {
                 }else if(elObj.className == "profile_in_game_header") {
                   userObj.status = elObj.text.trim()
                 }
-              console.log( elObj.className + " ==> " + elObj.text.trim());
-              // console.log("obj ==> ", userObj)
+              console.log( userObj.name + " ==> " + elObj.text.trim());
+              console.log("obj ==> ", userObj)
             }
             page.close()
-            userArr.push(userObj)
+            // userArr.push(userObj)
           }
           browser.close()
           userArr.forEach(item => {
-            if(item.playing) {
-              if(repeatMsg == '') {
-                repeatMsg += item.name + "正在玩:" + item.playing
-              }else {
-                repeatMsg += '\n' + item.name + "正在玩:" + item.playing
+            if(item.topic == roomName) {
+              if(item.playing) {
+                if(repeatMsg == '') {
+                  repeatMsg += item.wechatName + "正在玩:" + item.playing
+                }else {
+                  repeatMsg += '\n' + item.wechatName + "正在玩:" + item.playing
+                }
               }
             }
           })

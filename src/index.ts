@@ -33,7 +33,7 @@ async function onMessage(msg) {
     const topic = await room.topic();
     console.log("msg ==> " + msg.room() + " msg ==> " + JSON.stringify(msg))
     console.log(
-      `Group name: ${topic} talker: ${await alias} content: ${content}`
+      `Group name: ${topic} talker: ${await contact.name()} content: ${content}`
     );
     const pattern = RegExp(`^@${receiver.name()}\\s+${config.groupKey}[\\s]*`);
     const pattern4 = RegExp(`^@${receiver.name()}\\s+GPT4[\\s]*`);
@@ -61,7 +61,7 @@ async function onMessage(msg) {
       if(content == "[收到了一个表情，请在手机上查看]") {
         room.imgStr = '';
       }
-      chatGPTClient.repeatMsg(room, content);
+      chatGPTClient.repeatMsg(room, content, alias);
     }
   } else if(room && isImage) {
     let regPatternt = /cdnurl[\s]*=[\s]*"(.*?)"/;
