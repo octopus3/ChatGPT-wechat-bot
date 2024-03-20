@@ -391,17 +391,18 @@ function readSteamFile(steamId, isAdd, contact, name) {
         let topicName = await contact.topic();
         let steamIdSets = data.split(",")
         if(isAdd) {
+          let isBind = true
           for(let i = 0; i < steamIdSets.length; i ++) {
             let item = steamIdSets[i];
             let newArr = item.split(":")
              // 绑定操作并且绑定过了
             if(newArr[0] == topicName && newArr[2] == steamId) {
               contact.say("已经绑定过了")
-              return false;
-            }else {
-              writeSteamId(steamId, contact, name, data)
-              return
+              isBind = false;
             }
+          }
+          if(isBind) {
+            writeSteamId(steamId, contact, name, data)
           }
         }else {
           let result = steamIdSets.filter(item => {
