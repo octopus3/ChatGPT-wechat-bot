@@ -241,6 +241,8 @@ export default class ChatGPT {
         if (matchResult) {
           let bvid = matchResult[1]
           this.summaryFetch(bvid, contact)
+        }else {
+          contact.say("有视频咩？")
         }
       })
 
@@ -335,7 +337,11 @@ export default class ChatGPT {
                 console.log("该BV号视频总结功能不适用")
                 contact.say(`标题：${title}\n作者：${owner.name}\n简介：${desc}` + "\n-----------\n" + "该视频总结功能不适用");
               }
+            }).catch(error => {
+              console.log("json error ==> " + error)
             })
+          }).catch(error => {
+            console.log("error ==> " + error)
           })
         }
       })
@@ -451,52 +457,58 @@ async function readSteamId(contact) {
         if(steamIdSets.length > 0) {
           let userArr:any = []
           const pages = await Promise.all(steamIdSets.map(async (steamId) => {
-            console.log("steamId ==> ", steamId);
-            let userObj = {name: '', status: '', playing: '', wechatName: "", topic: ""}
-            const page = await browser.newPage()
             let userInfo = steamId.split(":")
-            userObj.wechatName = userInfo[1]
-            userObj.topic = userInfo[0]
-            userArr.push(userObj)
-            await page.goto('https://steamcommunity.com/profiles/' + userInfo[2])
-            return page
-          }))
-          for(const [index, page] of pages.entries()) {
-            let userObj = userArr[index]
-            await page.bringToFront()
-            let nameElement = await page.$(".actual_persona_name")
-            let name = await page.evaluate(el => {
-              return {
-                "text": el.textContent,
-                "className": el.className
-              }
-            }, nameElement)
-            userObj.name = name.text.trim()
-            let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
+            if(userInfo[0] == roomName) {
+              console.log("steamId ==> ", steamId);
+              let userObj = {name: '', status: '', playing: '', wechatName: "", topic: ""}
+              const page = await browser.newPage()
 
-            for (let element of elements) {
-              const elObj = await page.evaluate(
-                el => {
-                  return {
-                    "text": el.textContent,
-                    "className": el.className
-                  }
-                },
-                element);
-                if(elObj.className == 'actual_persona_name') {
-                  userObj.name = elObj.text.trim()
-                }else if(elObj.className == 'profile_in_game_name') {
-                  userObj.playing = elObj.text.trim()
-                }else if(elObj.className == "profile_in_game_header") {
-                  userObj.status = elObj.text.trim()
+              await page.goto('https://steamcommunity.com/profiles/' + userInfo[2], {'timeout': 60 * 1000})
+              page.wechatName = userInfo[1]
+              page.topic = userInfo[0]
+              await page.bringToFront()
+              // 爬取信息
+              let nameElement = await page.$(".actual_persona_name")
+              // await page.waitForSelector('actual_persona_name')
+              let name = await page.evaluate(el => {
+                return {
+                  "text": el.textContent,
+                  "className": el.className
                 }
-              console.log( userObj.name + " ==> " + elObj.text.trim());
-              console.log("obj ==> ", userObj)
+              }, nameElement)
+              userObj.name = name.text.trim()
+
+              let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
+
+              for (let element of elements) {
+                const elObj = await page.evaluate(
+                  el => {
+                    return {
+                      "text": el.textContent,
+                      "className": el.className
+                    }
+                  },
+                  element);
+                  if(elObj.className == 'actual_persona_name') {
+                    userObj.name = elObj.text.trim()
+                  }else if(elObj.className == 'profile_in_game_name') {
+                    userObj.playing = elObj.text.trim()
+                  }else if(elObj.className == "profile_in_game_header") {
+                    userObj.status = elObj.text.trim()
+                  }
+                  userObj.wechatName = page.wechatName
+                  userObj.topic = page.topic
+                  console.log( userObj.name + " ==> " + elObj.text.trim());
+
+              }
+              // end
+              userArr.push(userObj)
+
+              console.log('page close')
+              await page.close()
+              return page
             }
-            page.close()
-            // userArr.push(userObj)
-          }
-          browser.close()
+          }))
           userArr.forEach(item => {
             if(item.topic == roomName) {
               if(item.playing) {
@@ -513,10 +525,15 @@ async function readSteamId(contact) {
           }else {
             contact.say("没有人在玩")
           }
+          console.log(userArr)
+          console.log('browser close')
+          await browser.close()
         }
       }catch(e) {
         console.log('e ==> ' + e)
         contact.say("看不到谁在玩捏")
+      }finally {
+
       }
 
     })

@@ -27,14 +27,15 @@ async function onMessage(msg) {
   if (msg.self()) {
     return;
   }
+  console.log(" msg ==> " + JSON.stringify(msg))
   // console.log("talk type ==> " + msg.type() + " msg ==> " + content)
   // console.log("bot.Message.Type ==> " + JSON.stringify(bot.Message.Type));
   if (room && isText) {
     const topic = await room.topic();
-    console.log("msg ==> " + msg.room() + " msg ==> " + JSON.stringify(msg))
-    console.log(
-      `Group name: ${topic} talker: ${await contact.name()} content: ${content}`
-    );
+    // console.log("msg ==> " + msg.room() + " msg ==> " + JSON.stringify(msg))
+    // console.log(
+    //   `Group name: ${topic} talker: ${await contact.name()} content: ${content}`
+    // );
     const pattern = RegExp(`^@${receiver.name()}\\s+${config.groupKey}[\\s]*`);
     const pattern4 = RegExp(`^@${receiver.name()}\\s+GPT4[\\s]*`);
     if (await msg.mentionSelf()) {
