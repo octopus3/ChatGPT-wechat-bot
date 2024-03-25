@@ -19,6 +19,7 @@ async function onMessage(msg) {
   const receiver = msg.to();
   const content = msg.text().trim();
   const room = msg.room();
+  const roomId = msg.roomId;
   const alias = (await contact.alias()) || (await contact.name());
   const isText = msg.type() === bot.Message.Type.Text;
   const isImage = msg.type() == bot.Message.Type.Image;
@@ -27,15 +28,15 @@ async function onMessage(msg) {
   if (msg.self()) {
     return;
   }
-  console.log(" msg ==> " + JSON.stringify(msg))
+  console.log(" msg ==> " + JSON.stringify(msg) + " alias ==> " + alias)
   // console.log("talk type ==> " + msg.type() + " msg ==> " + content)
   // console.log("bot.Message.Type ==> " + JSON.stringify(bot.Message.Type));
   if (room && isText) {
     const topic = await room.topic();
     // console.log("msg ==> " + msg.room() + " msg ==> " + JSON.stringify(msg))
-    // console.log(
-    //   `Group name: ${topic} talker: ${await contact.name()} content: ${content}`
-    // );
+    console.log(
+      `Group name: ${topic} talker: ${await contact.name()} content: ${content}`
+    );
     const pattern = RegExp(`^@${receiver.name()}\\s+${config.groupKey}[\\s]*`);
     const pattern4 = RegExp(`^@${receiver.name()}\\s+GPT4[\\s]*`);
     if (await msg.mentionSelf()) {
@@ -62,7 +63,7 @@ async function onMessage(msg) {
       if(content == "[收到了一个表情，请在手机上查看]") {
         room.imgStr = '';
       }
-      chatGPTClient.repeatMsg(room, content, alias);
+      chatGPTClient.repeatMsg(room, content, await contact.name(), roomId);
     }
   } else if(room && isImage) {
     let regPatternt = /cdnurl[\s]*=[\s]*"(.*?)"/;

@@ -8,8 +8,8 @@ import {fileURLToPath} from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 let pathName = path.join(__dirname, '..', `steamData.txt`)
-const bili_ticket = 'eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTA5OTg2MTksImlhdCI6MTcxMDczOTM1OSwicGx0IjotMX0.4l_XqF_s7a1DIHnyRivT-hpPIRH4q8IjHRbL5w846wk'
-const SESSDATA = '2c81e346%2C1726291421%2Cc325b%2A31CjCkUp7FiXvSvUF5fwmMQQjtRKvymI6IXPX1kvQmkEuaekVrrYxhUenuF1F8iJdvpR0SVmt4b3I4N2RjMmZxWktSZDBKLXRNV09ybmhRd1ZkQ2FITTBOWl9ZVHFrMk1XeGVXYS16LTFqVVNhWmx2VkJxV2RsOTVnOUxsbjF0WHd1NldFWTBuVTdnIIEC'
+const bili_ticket = ''
+const SESSDATA = ''
 let browser;
 const clientOptions = {
   // (Optional) Support for a reverse proxy for the completions endpoint (private API server).
@@ -135,7 +135,7 @@ export default class ChatGPT {
   }
 
 
-  async repeatMsg(contact, content, alias) {
+  async repeatMsg(contact, content, alias, roomId) {
     const { id: contactId, imgStr, bvStrUrl } = contact;
     const pattern1 = RegExp(`.+(\\(|（)$`);
     const saveImage = RegExp(`^保存表情`);
@@ -194,13 +194,13 @@ export default class ChatGPT {
     }else if(steamBind.test(content)) {
       let contents = content.replace(steamBind, "");
       if(contents.match(/^765611.*/) && contents.length == 17) {
-        readSteamFile(contents, true, contact, alias)
+        readSteamFile(contents, true, contact, alias, roomId)
       }else {
         contact.say("steamId格式错误无法绑定")
       }
     }else if(steamNotBind.test(content)) {
       let contents = content.replace(steamNotBind, "");
-      readSteamFile(contents, false, contact, alias)
+      readSteamFile(contents, false, contact, alias, roomId)
     }else {
       return;
     }
@@ -387,7 +387,7 @@ async function writeSteamId(steamId, contact, name, readFileData) {
   }
 }
 
-function readSteamFile(steamId, isAdd, contact, name) {
+function readSteamFile(steamId, isAdd, contact, name, roomId) {
   if (fs.existsSync(pathName)) {
     fs.readFile(pathName, "utf8", async (errRead, data) => {
       if(errRead) {
@@ -467,6 +467,7 @@ async function readSteamId(contact) {
               page.wechatName = userInfo[1]
               page.topic = userInfo[0]
               await page.bringToFront()
+
               // 爬取信息
               let nameElement = await page.$(".actual_persona_name")
               // await page.waitForSelector('actual_persona_name')
