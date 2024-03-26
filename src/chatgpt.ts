@@ -462,11 +462,11 @@ async function readSteamId(contact) {
               console.log("steamId ==> ", steamId);
               let userObj = {name: '', status: '', playing: '', wechatName: "", topic: ""}
               const page = await browser.newPage()
-
-              await page.goto('https://steamcommunity.com/profiles/' + userInfo[2], {'timeout': 60 * 1000})
               page.wechatName = userInfo[1]
               page.topic = userInfo[0]
               await page.bringToFront()
+
+              await page.goto('https://steamcommunity.com/profiles/' + userInfo[2], {'timeout': 60 * 1000})
 
               // 爬取信息
               let nameElement = await page.$(".actual_persona_name")
@@ -480,7 +480,6 @@ async function readSteamId(contact) {
               userObj.name = name.text.trim()
 
               let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
-
               for (let element of elements) {
                 const elObj = await page.evaluate(
                   el => {
@@ -504,7 +503,7 @@ async function readSteamId(contact) {
               }
               // end
               userArr.push(userObj)
-
+              await page.screenshot()
               console.log('page close')
               await page.close()
               return page
@@ -513,10 +512,18 @@ async function readSteamId(contact) {
           userArr.forEach(item => {
             if(item.topic == roomName) {
               if(item.playing) {
+                if(!item.playing.startsWith("上次在线")) {
+                  if(repeatMsg == '') {
+                    repeatMsg += item.wechatName + "正在玩:" + item.playing
+                  }else {
+                    repeatMsg += '\n' + item.wechatName + "正在玩:" + item.playing
+                  }
+                }
+              }else if(item.status == '当前在线'){
                 if(repeatMsg == '') {
-                  repeatMsg += item.wechatName + "正在玩:" + item.playing
+                  repeatMsg += item.wechatName + item.status
                 }else {
-                  repeatMsg += '\n' + item.wechatName + "正在玩:" + item.playing
+                  repeatMsg += '\n' + item.wechatName + item.status
                 }
               }
             }
@@ -533,6 +540,9 @@ async function readSteamId(contact) {
       }catch(e) {
         console.log('e ==> ' + e)
         contact.say("看不到谁在玩捏")
+        if(browser) {
+          await browser.close()
+        }
       }finally {
 
       }
