@@ -4,10 +4,12 @@ import config from "./config.js";
 import puppeteer from 'puppeteer'
 import fs from 'fs';
 import path from 'path';
+import { FileBox } from 'file-box'
 import {fileURLToPath} from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 let pathName = path.join(__dirname, '..', `steamData.txt`)
+let steamCookiePath = path.join(__dirname, '..', `steamCookie.txt`);
 const bili_ticket = ''
 const SESSDATA = ''
 let browser;
@@ -138,12 +140,14 @@ export default class ChatGPT {
   async repeatMsg(contact, content, alias, roomId) {
     const { id: contactId, imgStr, bvStrUrl } = contact;
     const pattern1 = RegExp(`.+(\\(|（)$`);
-    const saveImage = RegExp(`^保存表情`);
-    const summaryVideo = RegExp(`^总结视频`);
+    const saveImage = RegExp(`^保存表情$`);
+    const summaryVideo = RegExp(`^总结视频$`);
+    const waitTimeVideo = RegExp(`^省流$`);
     const bvSummary = RegExp(`^bv号总结[\\s]*`);
-    const steamChecker = RegExp(`^谁在玩游戏`);
+    const steamChecker = RegExp(`^谁在玩游戏$`);
     const steamBind = RegExp(`^绑定steam[\\s]*`)
-    const steamNotBind = RegExp(`^解绑steam*`)
+    const steamNotBind = RegExp(`^解绑steam*`);
+    const howToDo = RegExp(`.*怎么办.*`)
     if(pattern1.test(content)){
       // 复读括号消息
       try {
@@ -163,7 +167,7 @@ export default class ChatGPT {
       }catch(e:any) {
 
       }
-    }else if(summaryVideo.test(content)) {
+    }else if(summaryVideo.test(content) || waitTimeVideo.test(content)) {
       // 总结视频
       try {
         if(bvStrUrl == null || bvStrUrl == '' || bvStrUrl == undefined) {
@@ -194,13 +198,16 @@ export default class ChatGPT {
     }else if(steamBind.test(content)) {
       let contents = content.replace(steamBind, "");
       if(contents.match(/^765611.*/) && contents.length == 17) {
-        readSteamFile(contents, true, contact, alias, roomId)
+        readSteamFile(contents, true, contact, alias)
       }else {
         contact.say("steamId格式错误无法绑定")
       }
     }else if(steamNotBind.test(content)) {
       let contents = content.replace(steamNotBind, "");
-      readSteamFile(contents, false, contact, alias, roomId)
+      readSteamFile(contents, false, contact, alias)
+    }else if(howToDo.test(content)) {
+      let filebox = FileBox.fromFile(path.join(__dirname, '..', `how.png`))
+      await contact.say(filebox)
     }else {
       return;
     }
@@ -281,7 +288,6 @@ export default class ChatGPT {
               let {
                 subtitle
               } = res.data
-              console.log("subtitle ==> " + JSON.stringify(res.data))
               if (subtitle && subtitle.subtitles[0] && subtitle.subtitles[0].subtitle_url) {
                 fetch("https://" + subtitle.subtitles[0].subtitle_url).then(detailSubtitle => {
                   detailSubtitle.json().then(res => {
@@ -295,7 +301,6 @@ export default class ChatGPT {
                       results[i] = `${secondsToMinutesAndSeconds(currentList[0].from)}-${secondsToMinutesAndSeconds(currentList[currentList.length - 1].to)}：`;
                       currentList.forEach((item) => (results[i] += item.content + ","));
                     }
-                    console.log("results ==> " + results)
                     results.forEach((item) => videoContexts.push({
                       role: "user",
                       content: item
@@ -387,7 +392,7 @@ async function writeSteamId(steamId, contact, name, readFileData) {
   }
 }
 
-function readSteamFile(steamId, isAdd, contact, name, roomId) {
+function readSteamFile(steamId, isAdd, contact, name) {
   if (fs.existsSync(pathName)) {
     fs.readFile(pathName, "utf8", async (errRead, data) => {
       if(errRead) {
@@ -441,112 +446,128 @@ function readSteamFile(steamId, isAdd, contact, name, roomId) {
 
 async function readSteamId(contact) {
   let roomName = await contact.topic()
+  if(contact.isReadSteamId == true) {
+    contact.say("在查啦，给我爬！")
+    return
+  }
   if (fs.existsSync(pathName)) {
     fs.readFile(pathName, "utf8", async (errRead, data) => {
       if(errRead) {
         return console.log(errRead)
       }
-      console.log("data ==> ", data.split(","))
-      let repeatMsg = ""
-      try {
-        browser = await puppeteer.launch({
-          args: [`--proxy-server=127.0.0.1:7890`]
-        })
-        let steamIdSets = data.split(",")
-
-        if(steamIdSets.length > 0) {
-          let userArr:any = []
-          const pages = await Promise.all(steamIdSets.map(async (steamId) => {
-            let userInfo = steamId.split(":")
-            if(userInfo[0] == roomName) {
-              console.log("steamId ==> ", steamId);
-              let userObj = {name: '', status: '', playing: '', wechatName: "", topic: ""}
-              const page = await browser.newPage()
-              page.wechatName = userInfo[1]
-              page.topic = userInfo[0]
-              await page.bringToFront()
-
-              await page.goto('https://steamcommunity.com/profiles/' + userInfo[2], {'timeout': 60 * 1000})
-
-              // 爬取信息
-              let nameElement = await page.$(".actual_persona_name")
-              // await page.waitForSelector('actual_persona_name')
-              let name = await page.evaluate(el => {
-                return {
-                  "text": el.textContent,
-                  "className": el.className
-                }
-              }, nameElement)
-              userObj.name = name.text.trim()
-
-              let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
-              for (let element of elements) {
-                const elObj = await page.evaluate(
-                  el => {
-                    return {
-                      "text": el.textContent,
-                      "className": el.className
-                    }
-                  },
-                  element);
-                  if(elObj.className == 'actual_persona_name') {
-                    userObj.name = elObj.text.trim()
-                  }else if(elObj.className == 'profile_in_game_name') {
-                    userObj.playing = elObj.text.trim()
-                  }else if(elObj.className == "profile_in_game_header") {
-                    userObj.status = elObj.text.trim()
-                  }
-                  userObj.wechatName = page.wechatName
-                  userObj.topic = page.topic
-                  console.log( userObj.name + " ==> " + elObj.text.trim());
-
-              }
-              // end
-              userArr.push(userObj)
-              await page.screenshot()
-              console.log('page close')
-              await page.close()
-              return page
-            }
-          }))
-          userArr.forEach(item => {
-            if(item.topic == roomName) {
-              if(item.playing) {
-                if(!item.playing.startsWith("上次在线")) {
-                  if(repeatMsg == '') {
-                    repeatMsg += item.wechatName + "正在玩:" + item.playing
-                  }else {
-                    repeatMsg += '\n' + item.wechatName + "正在玩:" + item.playing
-                  }
-                }
-              }else if(item.status == '当前在线'){
-                if(repeatMsg == '') {
-                  repeatMsg += item.wechatName + item.status
-                }else {
-                  repeatMsg += '\n' + item.wechatName + item.status
-                }
-              }
-            }
+      fs.readFile(steamCookiePath, 'utf-8', async (steamError, steamCookie) => {
+        if(steamError) {
+          return console.log("steamError ==> " + steamError)
+        }
+        let repeatMsg = ""
+        try {
+          contact.isReadSteamId = true
+          browser = await puppeteer.launch({
+            args: [`--proxy-server=127.0.0.1:7890`]
           })
-          if(repeatMsg != '') {
-            contact.say(repeatMsg)
-          }else {
-            contact.say("没有人在玩")
+          let steamIdSets = data.split(",")
+
+          if(steamIdSets.length > 0) {
+            let userArr:any = []
+            const pages = await Promise.all(steamIdSets.map(async (steamId) => {
+              let userInfo = steamId.split(":")
+              if(userInfo[0] == roomName) {
+                console.log("steamId ==> ", steamId);
+                let userObj = {name: '', status: '', playing: '', wechatName: "", topic: ""}
+                const page = await browser.newPage()
+                page.wechatName = userInfo[1]
+                page.topic = userInfo[0]
+                await page.bringToFront()
+                let cookie = {
+                  name: 'steamLoginSecure',
+                  domain: "steamcommunity.com",
+                  path: "/",
+                  value: "76561198341329027%7C%7CeyAidHlwIjogIkpXVCIsICJhbGciOiAiRWREU0EiIH0.eyAiaXNzIjogInI6MEVCRV8yNDI3OEE0NV82NDNBMiIsICJzdWIiOiAiNzY1NjExOTgzNDEzMjkwMjciLCAiYXVkIjogWyAid2ViOmNvbW11bml0eSIgXSwgImV4cCI6IDE3MTE3NzY4MzIsICJuYmYiOiAxNzAzMDUwMDAzLCAiaWF0IjogMTcxMTY5MDAwMywgImp0aSI6ICIwRUZGXzI0MkNGMTQ4X0UzQTE0IiwgIm9hdCI6IDE3MTEzNDY3OTUsICJydF9leHAiOiAxNzI5Nzk2MzMzLCAicGVyIjogMCwgImlwX3N1YmplY3QiOiAiMTAzLjE3MS4xNzcuMjAxIiwgImlwX2NvbmZpcm1lciI6ICIxMDMuMTcxLjE3Ny4yMDEiIH0.xjZwzPd8HpeyuSX3lw158QWut2ERIdSPEE1SA-Hu_UaQBOKk6c3t0K24-Ydo93Ud2PwVtTW-cr0XJNJcss52Ag"
+                }
+                await page.setCookie(cookie)
+                await page.goto('https://steamcommunity.com/profiles/' + userInfo[2].replace("\n", ""), {'timeout': 60 * 1000})
+
+                // 爬取信息
+                let nameElement = await page.$(".actual_persona_name")
+                // await page.waitForSelector('actual_persona_name')
+                let name = await page.evaluate(el => {
+                  return {
+                    "text": el.textContent,
+                    "className": el.className
+                  }
+                }, nameElement)
+                userObj.name = name.text.trim()
+
+                let elements = await page.$$('.profile_in_game_header,.profile_in_game_name')
+                for (let element of elements) {
+                  const elObj = await page.evaluate(
+                    el => {
+                      return {
+                        "text": el.textContent,
+                        "className": el.className
+                      }
+                    },
+                    element);
+                    if(elObj.className == 'actual_persona_name') {
+                      userObj.name = elObj.text.trim()
+                    }else if(elObj.className == 'profile_in_game_name') {
+                      userObj.playing = elObj.text.trim()
+                    }else if(elObj.className == "profile_in_game_header") {
+                      userObj.status = elObj.text.trim()
+                    }
+                    userObj.wechatName = page.wechatName
+                    userObj.topic = page.topic
+                    console.log( userObj.name + " ==> " + elObj.text.trim());
+
+                }
+                // end
+                userArr.push(userObj)
+                await page.screenshot()
+                console.log('page close')
+                await page.close()
+                return page
+              }
+            }))
+            userArr.forEach(item => {
+              if(item.topic == roomName) {
+                if(item.playing) {
+                  if(!item.playing.startsWith("上次在线")) {
+                    if(repeatMsg == '') {
+                      repeatMsg += item.wechatName + "正在玩:" + item.playing
+                    }else {
+                      repeatMsg += '\n' + item.wechatName + "正在玩:" + item.playing
+                    }
+                  }
+                }else if(item.status == '当前在线'){
+                  if(repeatMsg == '') {
+                    repeatMsg += item.wechatName + item.status
+                  }else {
+                    repeatMsg += '\n' + item.wechatName + item.status
+                  }
+                }
+              }
+            })
+            if(repeatMsg != '') {
+              contact.say(repeatMsg)
+            }else {
+              contact.say("没有人在玩")
+            }
+            console.log(userArr)
+            console.log('browser close')
+            await browser.close()
           }
-          console.log(userArr)
-          console.log('browser close')
-          await browser.close()
-        }
-      }catch(e) {
-        console.log('e ==> ' + e)
-        contact.say("看不到谁在玩捏")
-        if(browser) {
-          await browser.close()
-        }
-      }finally {
+          contact.isReadSteamId = false
+        }catch(e) {
+          console.log('e ==> ' + e)
+          contact.say("看不到谁在玩捏")
+          if(browser) {
+            await browser.close()
+          }
+          contact.isReadSteamId = false
+        }finally {
 
-      }
-
+        }
+      })
     })
   }
 }
