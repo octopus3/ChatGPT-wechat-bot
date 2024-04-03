@@ -148,6 +148,7 @@ export default class ChatGPT {
     const steamBind = RegExp(`^绑定steam[\\s]*`)
     const steamNotBind = RegExp(`^解绑steam*`);
     const howToDo = RegExp(`.*怎么办.*`)
+    const drinkSth = RegExp(`^喝什么`);
     if(pattern1.test(content)){
       // 复读括号消息
       try {
@@ -208,6 +209,8 @@ export default class ChatGPT {
     }else if(howToDo.test(content)) {
       let filebox = FileBox.fromFile(path.join(__dirname, '..', `how.png`))
       await contact.say(filebox)
+    }else if(drinkSth.test(content)) {
+      this.drinkSomething(contact)
     }else {
       return;
     }
@@ -243,14 +246,20 @@ export default class ChatGPT {
       },
     }).then(res => {
       res.text().then(res1 => {
-        let matchResult = res1.match(/content="https:\/\/www.bilibili.com\/video\/([^/]+)\/"/)
-        console.log("bvid ==> " + matchResult)
-        if (matchResult) {
-          let bvid = matchResult[1]
-          this.summaryFetch(bvid, contact)
-        }else {
-          contact.say("有视频咩？")
+        try {
+          let matchResult = res1.match(/content="https:\/\/www.bilibili.com\/video\/([^/]+)\/"/)
+          console.log("bvid ==> " + matchResult)
+          if (matchResult) {
+            let bvid = matchResult[1]
+            console.log('vvid ==> ' + bvid)
+            this.summaryFetch(bvid, contact)
+          }else {
+            contact.say("有视频咩？")
+          }
+        }catch(e) {
+          console.log('e ==> ' + e)
         }
+
       })
 
     })
@@ -353,6 +362,13 @@ export default class ChatGPT {
 
     });
   }
+
+  // 喝什么
+  drinkSomething(contact) {
+    const drinkArr = ["查理一世", "喜茶", "贡茶", "霸王茶姬", "一点点", "瑞幸", "星巴克", "蜜雪冰城", "茶百道", "奈雪的茶"]
+    let random = random_int(0, drinkArr.length - 1);
+    contact.say("我觉得可以喝" + drinkArr[random])
+  }
 }
 
 
@@ -362,6 +378,15 @@ const secondsToMinutesAndSeconds = (seconds) => {
   return minutes + "分" + remainingSeconds + "秒";
 };
 
+// 随机的生成[begin, end] 范围内的数据
+function random_int(begin, end) {
+  var num = begin + Math.random() * (end - begin + 1);
+  num = Math.floor(num);
+  if (num > end) {
+      num = end;
+  }
+  return num;
+}
 
 async function writeSteamId(steamId, contact, name, readFileData) {
   let roomName = await contact.topic()
@@ -482,7 +507,7 @@ async function readSteamId(contact) {
                   name: 'steamLoginSecure',
                   domain: "steamcommunity.com",
                   path: "/",
-                  value: "76561198341329027%7C%7CeyAidHlwIjogIkpXVCIsICJhbGciOiAiRWREU0EiIH0.eyAiaXNzIjogInI6MEVCRV8yNDI3OEE0NV82NDNBMiIsICJzdWIiOiAiNzY1NjExOTgzNDEzMjkwMjciLCAiYXVkIjogWyAid2ViOmNvbW11bml0eSIgXSwgImV4cCI6IDE3MTE3NzY4MzIsICJuYmYiOiAxNzAzMDUwMDAzLCAiaWF0IjogMTcxMTY5MDAwMywgImp0aSI6ICIwRUZGXzI0MkNGMTQ4X0UzQTE0IiwgIm9hdCI6IDE3MTEzNDY3OTUsICJydF9leHAiOiAxNzI5Nzk2MzMzLCAicGVyIjogMCwgImlwX3N1YmplY3QiOiAiMTAzLjE3MS4xNzcuMjAxIiwgImlwX2NvbmZpcm1lciI6ICIxMDMuMTcxLjE3Ny4yMDEiIH0.xjZwzPd8HpeyuSX3lw158QWut2ERIdSPEE1SA-Hu_UaQBOKk6c3t0K24-Ydo93Ud2PwVtTW-cr0XJNJcss52Ag"
+                  value: steamCookie.replace("\n", "")
                 }
                 await page.setCookie(cookie)
                 await page.goto('https://steamcommunity.com/profiles/' + userInfo[2].replace("\n", ""), {'timeout': 60 * 1000})

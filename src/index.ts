@@ -28,7 +28,6 @@ async function onMessage(msg) {
   if (msg.self()) {
     return;
   }
-  console.log(" msg ==> " + JSON.stringify(msg) + " alias ==> " + alias)
   // console.log("talk type ==> " + msg.type() + " msg ==> " + content)
   // console.log("bot.Message.Type ==> " + JSON.stringify(bot.Message.Type));
   if (room && isText) {
