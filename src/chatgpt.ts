@@ -8,10 +8,9 @@ import { FileBox } from 'file-box'
 import {fileURLToPath} from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-let pathName = path.join(__dirname, '..', `steamData.txt`)
+let pathName = path.join(__dirname, '..', `steamData.txt`);
 let steamCookiePath = path.join(__dirname, '..', `steamCookie.txt`);
-const bili_ticket = ''
-const SESSDATA = ''
+let biliPath = path.join(__dirname, "..", "bilibiliTicket.txt");
 let browser;
 const clientOptions = {
   // (Optional) Support for a reverse proxy for the completions endpoint (private API server).
@@ -49,7 +48,7 @@ const cacheOptions = {
   // For example, to use a JSON file (`npm i keyv-file`) as a database:
   // store: new KeyvFile({ filename: 'cache.json' }),
 };
-const cmd = [`保存表情`, `总结视频`, `bv号总结[\\s]*`, `查看指令`];
+const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam` ];
 const speakRuler = [`.+(\\(|（)$`];
 export default class ChatGPT {
   private chatGPT: any;
@@ -147,8 +146,11 @@ export default class ChatGPT {
     const steamChecker = RegExp(`^谁在玩游戏$`);
     const steamBind = RegExp(`^绑定steam[\\s]*`)
     const steamNotBind = RegExp(`^解绑steam*`);
-    const howToDo = RegExp(`.*怎么办.*`)
+    const howToDo = RegExp(`.*怎么办.*`);
     const drinkSth = RegExp(`^喝什么`);
+    const randomSelect = RegExp(`^随机选择[\\s]`);
+    const updateSteamToken = RegExp(`更新SteamCookie[\\s]*`)
+    const help = "帮助";
     if(pattern1.test(content)){
       // 复读括号消息
       try {
@@ -211,6 +213,19 @@ export default class ChatGPT {
       await contact.say(filebox)
     }else if(drinkSth.test(content)) {
       this.drinkSomething(contact)
+    }else if(randomSelect.test(content)) {
+      let randomSelectStr = content.replace(randomSelect, "");
+      this.randomSelect(contact, randomSelectStr)
+    }else if(help == content) {
+      this.writeCmd(contact);
+    }else if(updateSteamToken.test(content)) {
+      try {
+        let cookie = content.replace(updateSteamToken, "");
+        this.writeSteamCookie(contact, cookie, alias)
+      }catch(e) {
+        contact.say("error ==> ", e)
+      }
+
     }else {
       return;
     }
@@ -286,77 +301,82 @@ export default class ChatGPT {
             role: "user",
             content: `这是视频作者${owner.name}的${tname}视频，标题为${title}`
           }]
-          fetch(`https://api.bilibili.com/x/player/wbi/v2?aid=${aid}&cid=${cid}`, {
-            method: "GET",
-            headers: {
-              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-              cookie: `bili_ticket=${bili_ticket}; SESSDATA=${SESSDATA}`,
-            },
-          }).then(detail => {
-            detail.json().then(res => {
-              let {
-                subtitle
-              } = res.data
-              if (subtitle && subtitle.subtitles[0] && subtitle.subtitles[0].subtitle_url) {
-                fetch("https://" + subtitle.subtitles[0].subtitle_url).then(detailSubtitle => {
-                  detailSubtitle.json().then(res => {
-                    let list = res.body
-                    const fragment = Math.ceil(Math.random() * (6 - 3 + 1)) + 3;
-                    const fragmentLen = list.length / fragment;
-                    let results: any[] = []
-                    for (let i = 0; i < fragment; i++) {
-                      results.push("");
-                      const currentList = list.slice(fragmentLen * i, fragmentLen * (i + 1));
-                      results[i] = `${secondsToMinutesAndSeconds(currentList[0].from)}-${secondsToMinutesAndSeconds(currentList[currentList.length - 1].to)}：`;
-                      currentList.forEach((item) => (results[i] += item.content + ","));
-                    }
-                    results.forEach((item) => videoContexts.push({
-                      role: "user",
-                      content: item
-                    }));
+          getBilibiliTicket().then((biliData:any) => {
+            fetch(`https://api.bilibili.com/x/player/wbi/v2?aid=${aid}&cid=${cid}`, {
+              method: "GET",
+              headers: {
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                cookie: `bili_ticket=${biliData.bili_ticket}; SESSDATA=${biliData.SESSDATA}`,
+              },
+            }).then(detail => {
+              detail.json().then(res => {
+                let {
+                  subtitle
+                } = res.data
+                if (subtitle && subtitle.subtitles[0] && subtitle.subtitles[0].subtitle_url) {
+                  fetch("https://" + subtitle.subtitles[0].subtitle_url).then(detailSubtitle => {
+                    detailSubtitle.json().then(res => {
+                      let list = res.body
+                      const fragment = Math.ceil(Math.random() * (6 - 3 + 1)) + 3;
+                      const fragmentLen = list.length / fragment;
+                      let results: any[] = []
+                      for (let i = 0; i < fragment; i++) {
+                        results.push("");
+                        const currentList = list.slice(fragmentLen * i, fragmentLen * (i + 1));
+                        if(currentList.length) {
+                          results[i] = `${secondsToMinutesAndSeconds(currentList[0].from)}-${secondsToMinutesAndSeconds(currentList[currentList.length - 1].to)}：`;
+                          currentList.forEach((item) => (results[i] += item.content + ","));
+                        }
+                      }
+                      results.forEach((item) => videoContexts.push({
+                        role: "user",
+                        content: item
+                      }));
 
-                    videoContexts.push({
-                      role: "user",
-                      content: "根据视频信息与字幕时间段，详细总结视频时间线与具体内容",
-                    });
-                    fetch("https://api.openai-proxy.com/v1/chat/completions", {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": "Bearer " + config.OPENAI_API_KEY
-                        // 'Content-Type': 'application/x-www-form-urlencoded',
-                      },
-                      body: JSON.stringify({
-                        messages: videoContexts,
-                        model: clientOptions.modelOptions.model,
-                      })
-                    }).then(res => {
-                      res.json().then(message => {
-                          console.log("fetch message ==> " + JSON.stringify(message.choices))
-                          if ((contact.topic && contact?.topic() && config.groupReplyMode) || (!contact.topic && config.privateReplyMode)) {
-                            let content = message.choices[0].message.content
-                            const result = `标题：${title}\n作者：${owner.name}\n简介：${desc}\n` + "总结内容如下：" + "\n-----------\n" + content;
-                            contact.say(result);
-                            return;
-                          } else {
-                            let content = message.choices[0].message.content
-                            const result = `标题：${title}\n作者：${owner.name}\n简介：${desc}\n` + "总结内容如下：" + "\n-----------\n" + content;
-                            contact.say(result);
-                          }
+                      videoContexts.push({
+                        role: "user",
+                        content: "根据视频信息与字幕时间段，详细总结视频时间线与具体内容",
+                      });
+                      fetch("https://api.openai-proxy.com/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          "Authorization": "Bearer " + config.OPENAI_API_KEY
+                          // 'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: JSON.stringify({
+                          messages: videoContexts,
+                          model: clientOptions.modelOptions.model,
+                        })
+                      }).then(res => {
+                        res.json().then(message => {
+                            console.log("fetch message ==> " + JSON.stringify(message.choices))
+                            if ((contact.topic && contact?.topic() && config.groupReplyMode) || (!contact.topic && config.privateReplyMode)) {
+                              let content = message.choices[0].message.content
+                              const result = `标题：${title}\n作者：${owner.name}\n简介：${desc}\n` + "总结内容如下：" + "\n-----------\n" + content;
+                              contact.say(result);
+                              return;
+                            } else {
+                              let content = message.choices[0].message.content
+                              const result = `标题：${title}\n作者：${owner.name}\n简介：${desc}\n` + "总结内容如下：" + "\n-----------\n" + content;
+                              contact.say(result);
+                            }
+                        })
                       })
                     })
                   })
-                })
-              } else {
-                console.log("该BV号视频总结功能不适用")
-                contact.say(`标题：${title}\n作者：${owner.name}\n简介：${desc}` + "\n-----------\n" + "该视频总结功能不适用");
-              }
+                } else {
+                  console.log("该BV号视频总结功能不适用")
+                  contact.say(`标题：${title}\n作者：${owner.name}\n简介：${desc}` + "\n-----------\n" + "该视频总结功能不适用");
+                }
+              }).catch(error => {
+                console.log("json error ==> " + error)
+              })
             }).catch(error => {
-              console.log("json error ==> " + error)
+              console.log("error ==> " + error)
             })
-          }).catch(error => {
-            console.log("error ==> " + error)
           })
+
         }
       })
 
@@ -368,6 +388,41 @@ export default class ChatGPT {
     const drinkArr = ["查理一世", "喜茶", "贡茶", "霸王茶姬", "一点点", "瑞幸", "星巴克", "蜜雪冰城", "茶百道", "奈雪的茶"]
     let random = random_int(0, drinkArr.length - 1);
     contact.say("我觉得可以喝" + drinkArr[random])
+  }
+
+  randomSelect(contact, content) {
+    let selectArr = content.split(" ");
+    let random = random_int(0, selectArr.length - 1);
+    contact.say("我选择" + selectArr[random])
+  }
+
+  writeCmd(contact) {
+    let str = ''
+    cmd.forEach((item, idx) => {
+      if(str == '') {
+        str = item
+      }else {
+        str += '\n' + item
+      }
+    })
+    contact.say("我的命令有\n" + str)
+  }
+
+  writeSteamCookie(contact, cookie, name) {
+    if(name == "知更不咕鸟") {
+      if(fs.existsSync(steamCookiePath)) {
+        fs.writeFile(steamCookiePath, cookie, function(err) {
+          if (err) {
+            contact.say(err)
+            return console.log(err);
+          }
+          contact.say("写入完成啦")
+        })
+      }
+    }else {
+      contact.say("就你？你不行~")
+    }
+
   }
 }
 
@@ -472,7 +527,7 @@ function readSteamFile(steamId, isAdd, contact, name) {
 async function readSteamId(contact) {
   let roomName = await contact.topic()
   if(contact.isReadSteamId == true) {
-    contact.say("在查啦，给我爬！")
+    contact.say("在查啦，再等一下下啦~")
     return
   }
   if (fs.existsSync(pathName)) {
@@ -614,5 +669,20 @@ function writeSteamId2Array(array) {
       return console.log(err);
     }
     console.log("The file was saved!");
+  })
+}
+
+function getBilibiliTicket() {
+  return new Promise((resolve, reject) => {
+    fs.readFile(biliPath, 'utf-8', async (err, biliData) => {
+      if(err) {
+        console.log("bilibili err ==> " + err)
+        reject(err)
+        return
+      }
+      let data = biliData.split("\n")
+      console.log(data)
+      resolve({SESSDATA: data[0], bili_ticket: data[1]})
+    })
   })
 }

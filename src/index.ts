@@ -23,7 +23,6 @@ async function onMessage(msg) {
   const alias = (await contact.alias()) || (await contact.name());
   const isText = msg.type() === bot.Message.Type.Text;
   const isImage = msg.type() == bot.Message.Type.Image;
-  // const isMentionSelf = content.includes(`@知鸟不咕更`)
   const isAttachment = msg.type() == bot.Message.Type.Attachment;
   if (msg.self()) {
     return;
@@ -40,7 +39,7 @@ async function onMessage(msg) {
     const pattern4 = RegExp(`^@${receiver.name()}\\s+GPT4[\\s]*`);
     if (await msg.mentionSelf()) {
       if(pattern4.test(content)) {
-        const groupContent = content.replace(pattern, "");
+        const groupContent = content.replace(pattern4, "");
         chatGPTClient4.replyMessage(room, groupContent);
         return;
       } else if (pattern.test(content)) {
