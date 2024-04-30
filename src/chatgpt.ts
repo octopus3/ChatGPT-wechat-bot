@@ -5,6 +5,7 @@ import puppeteer from 'puppeteer'
 import fs from 'fs';
 import path from 'path';
 import { FileBox } from 'file-box'
+import {throttle} from './utils.js'
 import {fileURLToPath} from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,7 +49,7 @@ const cacheOptions = {
   // For example, to use a JSON file (`npm i keyv-file`) as a database:
   // store: new KeyvFile({ filename: 'cache.json' }),
 };
-const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam` ];
+const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, `随机二次元`, `cos` ];
 const speakRuler = [`.+(\\(|（)$`];
 export default class ChatGPT {
   private chatGPT: any;
@@ -72,6 +73,8 @@ export default class ChatGPT {
       },
       cacheOptions
     );
+    this.coser = throttle(this.coser, 1000, this)
+    this.animeReturn = throttle(this.animeReturn, 1000, this)
     // this.test();
   }
   async test() {
@@ -150,6 +153,10 @@ export default class ChatGPT {
     const drinkSth = RegExp(`^喝什么`);
     const randomSelect = RegExp(`^随机选择[\\s]`);
     const updateSteamToken = RegExp(`更新SteamCookie[\\s]*`)
+    const moyu = RegExp(`^摸鱼日报$`)
+    const yuan = RegExp(`.*原[!|！]$`)
+    const yuanAnime = RegExp(`^随机二次元$`)
+    const cos = RegExp(`^cos$`)
     const help = "帮助";
     if(pattern1.test(content)){
       // 复读括号消息
@@ -184,13 +191,14 @@ export default class ChatGPT {
     }else if(bvSummary.test(content)) {
       try {
         let contents = content.replace(bvSummary, "");
-        if(contents.test(/BV.*/)) {
-          this.getShare2BV(contents)
+        console.log("contents ==> ", contents);
+        if(/BV.*/.test(contents)) {
+          this.summaryFetch(contents, contact)
         }else {
           contact.say("请输入正确的bv号")
         }
       }catch(e) {
-
+        console.log('e ==> ', e)
       }
     }else if(steamChecker.test(content)) {
       try {
@@ -225,7 +233,14 @@ export default class ChatGPT {
       }catch(e) {
         contact.say("error ==> ", e)
       }
-
+    }else if(moyu.test(content)) {
+      this.mole(contact)
+    }else if(yuanAnime.test(content)) {
+      this.animeReturn(contact, '')
+    }else if(yuan.test(content)) {
+      this.animeReturn(contact, '原')
+    }else if(cos.test(content)) {
+      this.coser(contact)
     }else {
       return;
     }
@@ -424,8 +439,54 @@ export default class ChatGPT {
     }
 
   }
-}
 
+  mole(contact) {
+    fetch(`https://dayu.qqsuu.cn/moyuribao/apis.php?type=json`).then(html => {
+      html.json().then(res => {
+        console.log(" html ==> ", res)
+        let filebox = FileBox.fromUrl(res.data)
+        try {
+          contact.say(filebox)
+        }catch(e) {
+          console.log(e)
+          contact.say("这个图片打不开捏")
+        }
+      })
+    })
+  }
+
+  animeReturn(contact, type) {
+    let url = `https://api.52vmy.cn/api/img/tu/man`
+    if(type == '原') {
+      url = `https://api.52vmy.cn/api/img/tu/yuan`
+    }
+    fetch(url).then(html => {
+      html.json().then(res => {
+        let filebox = FileBox.fromUrl(res.url, random_int(0, 2000) + '.png')
+        try {
+          contact.say(filebox)
+        }catch(e) {
+          console.log(e)
+          contact.say("这个图片打不开捏")
+        }
+      })
+    })
+  }
+
+  coser(contact) {
+    fetch(`https://api.qvqa.cn/cos/?type=json`).then(html => {
+      html.json().then(res => {
+        let filebox = FileBox.fromUrl(res.data.msg)
+        try {
+          contact.say(filebox)
+        }catch(e) {
+          console.log(e)
+          contact.say("这个打不开捏")
+        }
+      })
+    })
+  }
+}
 
 const secondsToMinutesAndSeconds = (seconds) => {
   var minutes = Math.floor(seconds / 60);

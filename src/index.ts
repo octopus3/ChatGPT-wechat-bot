@@ -90,6 +90,11 @@ async function onMessage(msg) {
     if(content == "[收到了一个表情，请在手机上查看]") {
       contact.imgStr = '';
     }
+    const cos = RegExp(`^cos$`)
+    if(cos.test(content)) {
+      chatGPTClient.coser(contact)
+      return
+    }
     if (content.startsWith(config.privateKey) || config.privateKey === "") {
       let privateContent = content;
       if (config.privateKey === "") {

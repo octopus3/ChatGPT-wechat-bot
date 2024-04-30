@@ -39,3 +39,14 @@ export const retryRequest = async <T>(
 
   return output[1];
 };
+
+export const throttle = (func, time = 1000, context) => {
+  let previous = new Date(0).getTime()
+  return function (...args) {
+    let now = new Date().getTime()
+    if (now - previous > time) {
+      func.apply(context, args)
+      previous = now
+    }
+  }
+}
