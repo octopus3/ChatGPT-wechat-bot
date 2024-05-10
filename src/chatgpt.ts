@@ -10,6 +10,8 @@ import {fileURLToPath} from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 let pathName = path.join(__dirname, '..', `steamData.txt`);
+let pixivPath = path.join(__dirname, '..', 'pixiv_rank/');
+let tempSearchPath = path.join(__dirname, '..', 'temp_file/')
 let steamCookiePath = path.join(__dirname, '..', `steamCookie.txt`);
 let biliPath = path.join(__dirname, "..", "bilibiliTicket.txt");
 let browser;
@@ -49,7 +51,7 @@ const cacheOptions = {
   // For example, to use a JSON file (`npm i keyv-file`) as a database:
   // store: new KeyvFile({ filename: 'cache.json' }),
 };
-const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, `随机二次元`, `cos` ];
+const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid' ];
 const speakRuler = [`.+(\\(|（)$`];
 export default class ChatGPT {
   private chatGPT: any;
@@ -157,6 +159,7 @@ export default class ChatGPT {
     const yuan = RegExp(`.*原[!|！]$`)
     const yuanAnime = RegExp(`^随机二次元$`)
     const cos = RegExp(`^cos$`)
+    const searchPicReg = RegExp(`^搜图[\\s]*`)
     const help = "帮助";
     if(pattern1.test(content)){
       // 复读括号消息
@@ -235,12 +238,21 @@ export default class ChatGPT {
       }
     }else if(moyu.test(content)) {
       this.mole(contact)
-    }else if(yuanAnime.test(content)) {
+    }
+    else if(yuanAnime.test(content)) {
       this.animeReturn(contact, '')
     }else if(yuan.test(content)) {
       this.animeReturn(contact, '原')
     }else if(cos.test(content)) {
       this.coser(contact)
+    }
+    else if(searchPicReg.test(content)) {
+      let pixivId = content.replace(searchPicReg, "");
+      if(/^\d+$/.test(pixivId)) {
+        this.searchPixiv(contact, pixivId)
+      }else {
+        contact.say('格式不对')
+      }
     }else {
       return;
     }
@@ -456,6 +468,8 @@ export default class ChatGPT {
   }
 
   animeReturn(contact, type) {
+    contact.say("收手啦，阿祖")
+    return
     let url = `https://api.52vmy.cn/api/img/tu/man`
     if(type == '原') {
       url = `https://api.52vmy.cn/api/img/tu/yuan`
@@ -474,6 +488,8 @@ export default class ChatGPT {
   }
 
   coser(contact) {
+    contact.say("收手啦，阿祖")
+    return
     fetch(`https://api.qvqa.cn/cos/?type=json`).then(html => {
       html.json().then(res => {
         let filebox = FileBox.fromUrl(res.data.msg)
@@ -485,6 +501,71 @@ export default class ChatGPT {
         }
       })
     })
+  }
+
+  async searchPixiv(contact, pixivId) {
+    if(contact.isSearch == true) {
+      contact.say("在查啦，再等一下下啦~")
+      return
+    }
+    let browser = await puppeteer.launch({
+      args: [`--proxy-server=127.0.0.1:7890`],
+      userDataDir: '/tmp/chromeSession'
+    })
+    let fileName = ''
+    const imgUrlReg = new RegExp(`^https:\/\/i.pximg.net\/img-master\/.*`)
+    const page = await browser.newPage();
+    page.on('response', async (respond) => {
+      let url = respond.url()
+      if(respond.request().resourceType() == 'image') {
+        if(imgUrlReg.test(url)) {
+          console.log("imgUrlReg ==> ", url)
+          const buffer = await respond.buffer()
+          const imgBase64 = buffer.toString('base64')
+          fileName = pixivId + '.jpg'
+          await fs.writeFile(tempSearchPath + fileName, imgBase64, 'base64', () => {
+            let filebox = FileBox.fromFile(tempSearchPath + fileName)
+            console.log(tempSearchPath + fileName)
+            contact.say(filebox)
+            contact.isSearch = false
+          })
+
+        }
+      }
+    })
+    contact.isSearch = true
+    await page.goto('https://www.pixiv.net/artworks/' + pixivId)
+    try {
+      await page.waitForSelector('.huVRfc', {timeout: 60000})
+      let isNotFind = await page.$('.title')
+      let titleElement = await page.$('.huVRfc')
+      let tagElements = await page.$$('.iWBYKe')
+      let timeElement = await page.$('.dqHJfP')
+      let authorElement = await page.$('.hgVjiW')
+      let descElement = await page.$('.llrjLt')
+      // let paint = await page.$('.eMdOSW')
+      let tag = ""
+      let title = await page.evaluate(el => el.textContent, titleElement)
+      let time = await page.evaluate(el => el.textContent, timeElement)
+      let author = await page.evaluate(el => el.textContent, authorElement)
+      let desc = await page.evaluate(el => el.textContent, descElement)
+      for (let element of tagElements) {
+        let elObj = await page.evaluate(el => el.textContent, element)
+        console.log("elObj ==> ", elObj)
+        if(tag == '') {
+          tag += elObj
+        }else {
+          tag += ',' + elObj
+        }
+      }
+      await contact.say(`标题: ${title}\n上传时间: ${time}\n作者: ${author}\n简介: ${desc}\n标签: ${tag}`)
+      console.log("title:", title, " time ==> ", time, " author ==> ", author, "desc ==>", desc)
+    }
+    catch(e) {
+      console.log('error ==> ', e)
+      contact.say('查无此图')
+      contact.isSearch = false
+    }
   }
 }
 

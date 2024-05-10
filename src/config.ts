@@ -16,4 +16,6 @@ export default {
   groupReplyMode: true,
   // 是否在私聊中带上提问的问题
   privateReplyMode: false,
+  pixivAccount: "",
+  pixivPwd: ''
 };
