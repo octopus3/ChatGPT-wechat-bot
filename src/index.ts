@@ -91,11 +91,18 @@ async function onMessage(msg) {
       contact.imgStr = '';
     }
     const cos = RegExp(`^cos$`)
+    const searchPicReg = RegExp(`^搜图[\\s]+`)
     if(cos.test(content)) {
       chatGPTClient.coser(contact)
       return
-    }
-    if (content.startsWith(config.privateKey) || config.privateKey === "") {
+    }else if(searchPicReg.test(content)) {
+      let pixivId = content.replace(searchPicReg, "");
+      if(/^\d+$/.test(pixivId)) {
+        chatGPTClient.searchPixiv(contact, pixivId)
+      }else {
+        contact.say('格式不对')
+      }
+    }else if (content.startsWith(config.privateKey) || config.privateKey === "") {
       let privateContent = content;
       if (config.privateKey === "") {
         if(content.startsWith("GPT4 ")) {

@@ -14,6 +14,7 @@ let pixivPath = path.join(__dirname, '..', 'pixiv_rank/');
 let tempSearchPath = path.join(__dirname, '..', 'temp_file/')
 let steamCookiePath = path.join(__dirname, '..', `steamCookie.txt`);
 let biliPath = path.join(__dirname, "..", "bilibiliTicket.txt");
+let pixivRank = path.join(__dirname, '..', 'pixiv_rank')
 let browser;
 const clientOptions = {
   // (Optional) Support for a reverse proxy for the completions endpoint (private API server).
@@ -51,12 +52,16 @@ const cacheOptions = {
   // For example, to use a JSON file (`npm i keyv-file`) as a database:
   // store: new KeyvFile({ filename: 'cache.json' }),
 };
-const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid' ];
+const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid', '日榜图' ];
 const speakRuler = [`.+(\\(|（)$`];
 export default class ChatGPT {
   private chatGPT: any;
   private chatOption: any;
   private chatVideoSummary: any;
+  private myBroswer: any;
+  public folderResult: any;
+  public requestQueue:any[] = [];
+  downloadedUrls = new Set();
   constructor() {
     this.chatGPT = new ChatGPTClient(
       config.OPENAI_API_KEY,
@@ -77,6 +82,15 @@ export default class ChatGPT {
     );
     this.coser = throttle(this.coser, 1000, this)
     this.animeReturn = throttle(this.animeReturn, 1000, this)
+    let myResult = getFilesAndFoldersInDir(pixivRank)
+    let tmpArr = []
+    myResult.forEach(items => {
+      items.children.forEach(item => {
+        item.url = pixivRank + "/" + items.name + "/" + item.name
+      })
+      tmpArr = tmpArr.concat(items.children)
+    })
+    this.folderResult = tmpArr
     // this.test();
   }
   async test() {
@@ -147,10 +161,10 @@ export default class ChatGPT {
     const saveImage = RegExp(`^保存表情$`);
     const summaryVideo = RegExp(`^总结视频$`);
     const waitTimeVideo = RegExp(`^省流$`);
-    const bvSummary = RegExp(`^bv号总结[\\s]*`);
+    const bvSummary = RegExp(`^bv号总结[\\s]+`);
     const steamChecker = RegExp(`^谁在玩游戏$`);
-    const steamBind = RegExp(`^绑定steam[\\s]*`)
-    const steamNotBind = RegExp(`^解绑steam*`);
+    const steamBind = RegExp(`^绑定steam[\\s]+`)
+    const steamNotBind = RegExp(`^解绑steam[\\s]+`);
     const howToDo = RegExp(`.*怎么办.*`);
     const drinkSth = RegExp(`^喝什么`);
     const randomSelect = RegExp(`^随机选择[\\s]`);
@@ -159,7 +173,9 @@ export default class ChatGPT {
     const yuan = RegExp(`.*原[!|！]$`)
     const yuanAnime = RegExp(`^随机二次元$`)
     const cos = RegExp(`^cos$`)
-    const searchPicReg = RegExp(`^搜图[\\s]*`)
+    const searchPicReg = RegExp(`^搜图[\\s]+`)
+    const unlock = RegExp('^解锁搜图')
+    const picReg = RegExp('^日榜图$')
     const help = "帮助";
     if(pattern1.test(content)){
       // 复读括号消息
@@ -238,21 +254,28 @@ export default class ChatGPT {
       }
     }else if(moyu.test(content)) {
       this.mole(contact)
-    }
-    else if(yuanAnime.test(content)) {
+    }else if(yuanAnime.test(content)) {
       this.animeReturn(contact, '')
     }else if(yuan.test(content)) {
       this.animeReturn(contact, '原')
     }else if(cos.test(content)) {
       this.coser(contact)
-    }
-    else if(searchPicReg.test(content)) {
+    }else if(searchPicReg.test(content)) {
       let pixivId = content.replace(searchPicReg, "");
       if(/^\d+$/.test(pixivId)) {
         this.searchPixiv(contact, pixivId)
       }else {
         contact.say('格式不对')
       }
+    }else if(unlock.test(content)) {
+      if(alias == "知更不咕鸟") {
+        contact.isSearch = false
+        contact.say('解锁完毕')
+      }else {
+        contact.say('？')
+      }
+    }else if(picReg.test(content)) {
+      this.picRandom(contact)
     }else {
       return;
     }
@@ -467,8 +490,19 @@ export default class ChatGPT {
     })
   }
 
+  async picRandom(contact) {
+    try {
+      let randomInt = random_int(0, this.folderResult.length - 1)
+      console.log(this.folderResult[randomInt].url)
+      let fileBox =  FileBox.fromFile(this.folderResult[randomInt].url)
+      await contact.say(fileBox)
+    }catch(e) {
+      console.log('e ==> ', e)
+    }
+
+  }
+
   animeReturn(contact, type) {
-    contact.say("收手啦，阿祖")
     return
     let url = `https://api.52vmy.cn/api/img/tu/man`
     if(type == '原') {
@@ -488,7 +522,7 @@ export default class ChatGPT {
   }
 
   coser(contact) {
-    contact.say("收手啦，阿祖")
+    // contact.say("收手啦，阿祖")
     return
     fetch(`https://api.qvqa.cn/cos/?type=json`).then(html => {
       html.json().then(res => {
@@ -508,49 +542,82 @@ export default class ChatGPT {
       contact.say("在查啦，再等一下下啦~")
       return
     }
-    let browser = await puppeteer.launch({
-      args: [`--proxy-server=127.0.0.1:7890`],
-      userDataDir: '/tmp/chromeSession'
-    })
+    contact.processingQueue = false
+    contact.activeImageRequests = 0
+    if(!this.myBroswer) {
+      this.myBroswer = await puppeteer.launch({
+        args: [`--proxy-server=127.0.0.1:7890`],
+        userDataDir: '/tmp/chromeSession',
+        ignoreDefaultArgs:['--enable-automation'],
+        headless: true
+      })
+    }
     let fileName = ''
     const imgUrlReg = new RegExp(`^https:\/\/i.pximg.net\/img-master\/.*`)
-    const page = await browser.newPage();
-    page.on('response', async (respond) => {
-      let url = respond.url()
-      if(respond.request().resourceType() == 'image') {
-        if(imgUrlReg.test(url)) {
-          console.log("imgUrlReg ==> ", url)
-          const buffer = await respond.buffer()
-          const imgBase64 = buffer.toString('base64')
-          fileName = pixivId + '.jpg'
-          await fs.writeFile(tempSearchPath + fileName, imgBase64, 'base64', () => {
-            let filebox = FileBox.fromFile(tempSearchPath + fileName)
-            console.log(tempSearchPath + fileName)
-            contact.say(filebox)
-            contact.isSearch = false
-          })
+    if(contact.page) {
+      contact.isSearch = true
+      this.openNewPage(contact, pixivId)
+    }else {
+      contact.page = await this.myBroswer.newPage();
+      contact.page.on('response', async (respond) => {
+        // let url = respond.url()
+        // if(respond.request().resourceType() == 'image') {
+        //   if(imgUrlReg.test(url)) {
+        //     console.log("imgUrlReg ==> ", url)
+        //     const buffer = await respond.buffer()
+        //     const imgBase64 = buffer.toString('base64')
+        //     let resultName = url.match(/\d+_p\d*.*\.jpg/);
+        //     if(resultName) {
+        //       fileName = resultName
+        //     }else {
+        //       fileName = pixivId + '.jpg'
+        //     }
+        //     console.log(tempSearchPath + fileName)
+        //     await fs.promises.writeFile(tempSearchPath + fileName, imgBase64, 'base64')
+        //     let filebox = FileBox.fromFile(tempSearchPath + fileName)
+        //     await contact.say(filebox)
+        //     contact.isSearch = false
 
-        }
-      }
-    })
-    contact.isSearch = true
-    await page.goto('https://www.pixiv.net/artworks/' + pixivId)
+        //   }
+        // }
+        this.handleResponse(contact, respond, pixivId);
+      })
+      this.openNewPage(contact, pixivId)
+    }
+  }
+
+  async openNewPage(contact, pixivId) {
     try {
-      await page.waitForSelector('.huVRfc', {timeout: 60000})
-      let isNotFind = await page.$('.title')
-      let titleElement = await page.$('.huVRfc')
-      let tagElements = await page.$$('.iWBYKe')
-      let timeElement = await page.$('.dqHJfP')
-      let authorElement = await page.$('.hgVjiW')
-      let descElement = await page.$('.llrjLt')
+      let cookie = {
+        name: 'PHPSESSID',
+        domain: ".pixiv.net",
+        path: "/",
+        value: '19622961_eaGQhGtZN5BbUoHIebhV3PVzbrvU4iql'
+      }
+      await contact.page.setCookie(cookie)
+      await contact.page.goto('https://www.pixiv.net/artworks/' + pixivId).catch(e => {
+        console.log("timeout error ", e)
+      })
+      await contact.page.waitForSelector('.huVRfc', {timeout: 60000})
+      let isNotFind = await contact.page.$('.title')
+      let titleElement = await contact.page.$('.huVRfc')
+      let tagElements = await contact.page.$$('.iWBYKe')
+      let timeElement = await contact.page.$('.dqHJfP')
+      let authorElement = await contact.page.$('.hgVjiW')
+      let descElement = await contact.page.$('.llrjLt')
+      let watchElement = await contact.page.$('.wEKy')
       // let paint = await page.$('.eMdOSW')
+      let desc = null
       let tag = ""
-      let title = await page.evaluate(el => el.textContent, titleElement)
-      let time = await page.evaluate(el => el.textContent, timeElement)
-      let author = await page.evaluate(el => el.textContent, authorElement)
-      let desc = await page.evaluate(el => el.textContent, descElement)
+      let title = await contact.page.evaluate(el => el.textContent, titleElement)
+      let time = await contact.page.evaluate(el => el.textContent, timeElement)
+      let author = await contact.page.evaluate(el => el.textContent, authorElement)
+      if(descElement != null) {
+        desc = await contact.page.evaluate(el => el.textContent, descElement)
+      }
+
       for (let element of tagElements) {
-        let elObj = await page.evaluate(el => el.textContent, element)
+        let elObj = await contact.page.evaluate(el => el.textContent, element)
         console.log("elObj ==> ", elObj)
         if(tag == '') {
           tag += elObj
@@ -558,14 +625,113 @@ export default class ChatGPT {
           tag += ',' + elObj
         }
       }
+
       await contact.say(`标题: ${title}\n上传时间: ${time}\n作者: ${author}\n简介: ${desc}\n标签: ${tag}`)
       console.log("title:", title, " time ==> ", time, " author ==> ", author, "desc ==>", desc)
+      if(watchElement != null) {
+        contact.isPicMuti = true
+        // await contact.say('噢，这个作品好像还是多P的我再查查')
+        // const newPagePromise = new Promise(x => this.myBroswer.once('targetcreated', target => x(target.page())));
+
+        await watchElement.click()
+        // let tmpPage = await newPagePromise;
+        // // @ts-ignore
+        // await tmpPage.evaluate(function() {
+        //   // @ts-ignore
+        //   let iKsoAtElements = document.getElementsByClassName('iKsoAt')
+        //   let i = 0
+        //   let timeSch = setInterval(() => {
+        //     // @ts-ignore
+        //     if(i < iKsoAtElements.length) {
+        //       iKsoAtElements[i].scrollIntoView({ behavior: 'smooth' })
+        //       i ++
+        //     }else {
+        //       clearInterval(timeSch)
+        //     }
+        //  }, 2000)
+        // })
+        if(!contact.tmpPage) {
+          contact.tmpPage = await this.myBroswer.newPage()
+        }
+        contact.tmpPage.on('response', async (respond) => {
+          this.handleResponse(contact, respond, pixivId);
+        })
+        contact.tmpPage.goto('https://www.pixiv.net/artworks/' + pixivId + '#1')
+        await contact.tmpPage.waitFor(2000)
+        let hgmpfkElement = await contact.tmpPage.$$('.hgmpfk')
+        console.log('注入代码 ==> ' + hgmpfkElement.length)
+        await contact.tmpPage.evaluate(function() {
+          // @ts-ignore
+          let iKsoAtElements = document.getElementsByClassName('iKsoAt')
+          let i = 0
+          let timeSch = setInterval(() => {
+            // @ts-ignore
+            if(i < iKsoAtElements.length) {
+              iKsoAtElements[i].scrollIntoView({ behavior: 'smooth' })
+              i ++
+            }else {
+              clearInterval(timeSch)
+            }
+         }, 2000)
+        })
+      }
     }
     catch(e) {
       console.log('error ==> ', e)
-      contact.say('查无此图')
+      contact.say(pixivId + ' 查无此图')
       contact.isSearch = false
     }
+  }
+
+  async handleResponse(contact, response, pixivId) {
+    let url = response.url();
+    const imgUrlReg = new RegExp(`^https:\/\/i.pximg.net\/img-master\/.*`)
+    if (response.request().resourceType() === 'image' && imgUrlReg.test(url)) {
+      if (!this.downloadedUrls.has(url)) {
+        this.downloadedUrls.add(url);
+        contact.activeImageRequests++;
+        this.requestQueue.push({ contact, response, pixivId, url });
+        this.processQueue(contact);
+      }
+    }
+  }
+
+  async processQueue(contact) {
+    if (contact.processingQueue) return;
+
+    contact.processingQueue = true;
+    while (this.requestQueue.length > 0) {
+      const { contact, response, pixivId, url } = this.requestQueue.shift();
+      await this.processImage(contact, response, pixivId, url);
+      // 每处理完一个请求，减去一个计数
+    }
+    contact.processingQueue = false;
+
+    if (contact.activeImageRequests == 0) {
+      this.onAllImagesProcessed(contact);
+    }
+  }
+
+  onAllImagesProcessed(contact) {
+    contact.isSearch = false;
+    contact.say("所有图片已处理完毕！");
+    // 这里可以执行所有图片请求处理完毕后的其他操作
+  }
+
+  async processImage(contact, response, pixivId, url) {
+    const buffer = await response.buffer();
+    const imgBase64 = buffer.toString('base64');
+    let resultName = url.match(/\d+_p\d*.*\.jpg/);
+    let fileName = resultName ? resultName[0] : `${pixivId}.jpg`;
+    const filePath = path.join(tempSearchPath, fileName);
+
+    // 检查文件是否已经存在
+    if (!fs.existsSync(filePath)) {
+      await fs.promises.writeFile(filePath, imgBase64, 'base64');
+    }
+
+    let filebox = FileBox.fromFile(filePath);
+    await contact.say(filebox);
   }
 }
 
@@ -827,4 +993,33 @@ function getBilibiliTicket() {
       resolve({SESSDATA: data[0], bili_ticket: data[1]})
     })
   })
+}
+
+function getFilesAndFoldersInDir(path) {
+  const items = fs.readdirSync(path);
+  const result:any[] = [];
+  items.forEach(item => {
+    const itemPath = `${path}/${item}`;
+    const stat = fs.statSync(itemPath);
+    if (stat.isDirectory()) {
+      let data = {
+        // 文件夹
+        type: 'folder',
+        name: item,
+        children: null as any[] | null
+      }
+      let children = getFilesAndFoldersInDir(itemPath)
+      if (children && children.length) {
+        data.children = children
+      }
+      result.push(data);
+    } else {
+      // 文件
+      result.push({
+        type: 'file',
+        name: item
+      });
+    }
+  });
+  return result;
 }
