@@ -16,6 +16,7 @@ let steamCookiePath = path.join(__dirname, '..', `steamCookie.txt`);
 let biliPath = path.join(__dirname, "..", "bilibiliTicket.txt");
 let pixivRank = path.join(__dirname, '..', 'pixiv_rank')
 let browser;
+let window:any;
 const clientOptions = {
   // (Optional) Support for a reverse proxy for the completions endpoint (private API server).
   // Warning: This will expose your `openaiApiKey` to a third party. Consider the risks before using this.
@@ -52,7 +53,7 @@ const cacheOptions = {
   // For example, to use a JSON file (`npm i keyv-file`) as a database:
   // store: new KeyvFile({ filename: 'cache.json' }),
 };
-const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid', '日榜图' ];
+const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid', '日榜图', '奥运会排名' ];
 const speakRuler = [`.+(\\(|（)$`];
 export default class ChatGPT {
   private chatGPT: any;
@@ -85,6 +86,7 @@ export default class ChatGPT {
     let myResult = getFilesAndFoldersInDir(pixivRank)
     let tmpArr = []
     myResult.forEach(items => {
+      console.log('items.name ==> ', items.name)
       items.children.forEach(item => {
         item.url = pixivRank + "/" + items.name + "/" + item.name
       })
@@ -176,6 +178,8 @@ export default class ChatGPT {
     const searchPicReg = RegExp(`^搜图[\\s]+`)
     const unlock = RegExp('^解锁搜图')
     const picReg = RegExp('^日榜图$')
+    const picUpdate = RegExp("^更新日榜图$")
+    const goldRank = RegExp("^奥运会排名")
     const help = "帮助";
     if(pattern1.test(content)){
       // 复读括号消息
@@ -276,6 +280,10 @@ export default class ChatGPT {
       }
     }else if(picReg.test(content)) {
       this.picRandom(contact)
+    }else if(picUpdate.test(content)){
+      this.updateDayPic(contact)
+    }else if(goldRank.test(content)) {
+      this.searchMarjor(contact)
     }else {
       return;
     }
@@ -344,9 +352,13 @@ export default class ChatGPT {
             owner,
             desc,
             tname,
+            pic,
             title
           } = videoInfo.data;
-
+          if(pic != null) {
+            let filebox = FileBox.fromUrl(pic);
+            contact.say(filebox);
+          }
           const videoContexts = [{
             role: "user",
             content: `这是视频作者${owner.name}的${tname}视频，标题为${title}`
@@ -435,7 +447,7 @@ export default class ChatGPT {
 
   // 喝什么
   drinkSomething(contact) {
-    const drinkArr = ["查理一世", "喜茶", "贡茶", "霸王茶姬", "一点点", "瑞幸", "星巴克", "蜜雪冰城", "茶百道", "奈雪的茶"]
+    const drinkArr = ["查理宜世", "喜茶", "贡茶", "霸王茶姬", "瑞幸", "蜜雪冰城", "茶百道", "奈雪的茶"]
     let random = random_int(0, drinkArr.length - 1);
     contact.say("我觉得可以喝" + drinkArr[random])
   }
@@ -496,6 +508,7 @@ export default class ChatGPT {
       console.log(this.folderResult[randomInt].url)
       let fileBox =  FileBox.fromFile(this.folderResult[randomInt].url)
       await contact.say(fileBox)
+      await contact.say("pixivId: " + this.folderResult[randomInt].name.replace(".jpg", ""))
     }catch(e) {
       console.log('e ==> ', e)
     }
@@ -663,11 +676,13 @@ export default class ChatGPT {
         await contact.tmpPage.evaluate(function() {
           // @ts-ignore
           let iKsoAtElements = document.getElementsByClassName('iKsoAt')
+          // @ts-ignore
+          let eMdOSWElements = document.getElementsByClassName('eMdOSW')
           let i = 0
           let timeSch = setInterval(() => {
             // @ts-ignore
-            if(i < iKsoAtElements.length) {
-              iKsoAtElements[i].scrollIntoView({ behavior: 'smooth' })
+            if(i < eMdOSWElements.length) {
+              eMdOSWElements[i].scrollIntoView({ behavior: 'smooth' })
               i ++
             }else {
               clearInterval(timeSch)
@@ -732,6 +747,81 @@ export default class ChatGPT {
 
     let filebox = FileBox.fromFile(filePath);
     await contact.say(filebox);
+  }
+
+  async updateDayPic(contact) {
+    let myResult = getFilesAndFoldersInDir(pixivRank)
+    let tmpArr = []
+    myResult.forEach(items => {
+      console.log('items.name ==> ', items.name)
+      items.children.forEach(item => {
+        item.url = pixivRank + "/" + items.name + "/" + item.name
+      })
+      tmpArr = tmpArr.concat(items.children)
+    })
+    this.folderResult = tmpArr
+    await contact.say('更新完毕')
+  }
+
+  async searchMarjor(contact) {
+    let browser = await puppeteer.launch({
+      args: [`--proxy-server=127.0.0.1:7890`],
+      userDataDir: '/tmp/chromeSession',
+      headless: true,
+      defaultViewport: {width: 1366, height: 1000}
+    })
+    const page = await browser.newPage();
+    await page.goto('https://tiyu.baidu.com/al/major/home?match=2024%E5%B9%B4%E5%B7%B4%E9%BB%8E%E5%A5%A5%E8%BF%90%E4%BC%9A&tab=%E5%A5%96%E7%89%8C%E6%A6%9C')
+    await page.evaluate(function() {
+      let y = 3000
+      window.scrollTo(0, y)
+    })
+    let gold;
+    let silver;
+    let copper;
+    let total;
+    let rank;
+    let list:any = [];
+
+    let rankElement = await page.$$('.rankContainer')
+    for(let element of rankElement) {
+      let txt = await page.evaluate(el => {
+        return {
+          "text": el.textContent,
+          "className": el.className
+        }
+      }, element)
+      let item = txt.text.split(' ')
+      let myCountry = item[0].split(/\d/)
+      let country = '';
+      gold = item[1];
+      silver = item[3];
+      copper = item[5];
+      total = item[6];
+      myCountry.forEach(item => {
+        country += item
+      })
+      list.push({
+        country,
+        gold,
+        silver,
+        copper,
+        total
+      })
+    }
+    let message = ''
+    list.forEach((item, index) => {
+      if(index == list.length - 1) {
+        message += `${index + 1}  ${item.country}  金牌：${item.gold}  银牌：${item.silver}  铜牌:${item.copper} 总数:${item.total}`
+      }else {
+        message += `${index + 1}  ${item.country}  金牌：${item.gold}  银牌：${item.silver}  铜牌:${item.copper} 总数:${item.total}\n`
+      }
+    })
+
+    await contact.say(message)
+    await page.close()
+    await browser.close()
+    console.log('browser close!')
   }
 }
 

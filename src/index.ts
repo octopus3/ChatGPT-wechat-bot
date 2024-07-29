@@ -92,9 +92,13 @@ async function onMessage(msg) {
     }
     const cos = RegExp(`^cos$`)
     const searchPicReg = RegExp(`^搜图[\\s]+`)
+    const goldRank = RegExp("^奥运会排名")
     if(cos.test(content)) {
       chatGPTClient.coser(contact)
       return
+    }else if(goldRank.test(content)) {
+      chatGPTClient.searchMarjor(contact)
+      return;
     }else if(searchPicReg.test(content)) {
       let pixivId = content.replace(searchPicReg, "");
       if(/^\d+$/.test(pixivId)) {
