@@ -15,6 +15,7 @@ let tempSearchPath = path.join(__dirname, '..', 'temp_file/')
 let steamCookiePath = path.join(__dirname, '..', `steamCookie.txt`);
 let biliPath = path.join(__dirname, "..", "bilibiliTicket.txt");
 let pixivRank = path.join(__dirname, '..', 'pixiv_rank')
+let createImg = path.join(__dirname, '..', 'create_img')
 let browser;
 let window:any;
 const clientOptions = {
@@ -53,7 +54,7 @@ const cacheOptions = {
   // For example, to use a JSON file (`npm i keyv-file`) as a database:
   // store: new KeyvFile({ filename: 'cache.json' }),
 };
-const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid', '日榜图', '奥运会排名' ];
+const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid', '日榜图', '约稿 提示词(英文)', '提示词' ];
 const speakRuler = [`.+(\\(|（)$`];
 export default class ChatGPT {
   private chatGPT: any;
@@ -179,7 +180,8 @@ export default class ChatGPT {
     const unlock = RegExp('^解锁搜图')
     const picReg = RegExp('^日榜图$')
     const picUpdate = RegExp("^更新日榜图$")
-    const goldRank = RegExp("^奥运会排名")
+    const sdImg = RegExp("^约稿")
+    const tipsSearch = RegExp("^提示词")
     const help = "帮助";
     if(pattern1.test(content)){
       // 复读括号消息
@@ -282,8 +284,9 @@ export default class ChatGPT {
       this.picRandom(contact)
     }else if(picUpdate.test(content)){
       this.updateDayPic(contact)
-    }else if(goldRank.test(content)) {
-      this.searchMarjor(contact)
+    }else if(sdImg.test(content)) {
+      let params = content.replace(sdImg, "")
+      this.text2Image(contact, params)
     }else {
       return;
     }
@@ -822,6 +825,73 @@ export default class ChatGPT {
     await page.close()
     await browser.close()
     console.log('browser close!')
+  }
+
+  async text2Image(contact, params) {
+    let cmd = params.split(" ");
+    let number:Number = 1
+    let prompt:String = ""
+    let negative_prompt:String = "lowres,bad anatomy,bad hands,text,error,missing,fingers,extra digit,fewer digits,cropped,worst quality,low quality,normal quality,jpeg artifacts,signature,watermark,username,blurry,"
+    let prompts = params.split(",")
+    if(cmd[0] == '-n') {
+      if(cmd[1] instanceof Number) {
+        number = cmd[1]
+        prompts = cmd[2]
+      }else {
+        contact.say("参数错误")
+      }
+    }
+    prompts.forEach(item => {
+      prompt += item + ','
+    })
+    let body = JSON.stringify({
+      prompt,
+      negative_prompt: negative_prompt,
+      sampler_name: "Euler a",
+      steps: 20,
+      cfg_scale: 7,
+      height: 512,
+      width: 512,
+      seed: -1,
+      enable_hr: true,
+      hr_scale: 2,
+      denoising_strength: 0.7,
+      hr_second_pass_steps: 20,
+      hr_upscaler: "Latent",
+      send_images: true,
+      save_images: true
+    })
+    console.log('body ==> ', body)
+    contact.say("正在生成中...")
+    fetch(config.text2imgUrl, {
+      method: 'POST',
+      headers: {
+        "Content-Type": "application/json",
+        // 'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    }).then(html => {
+      html.json().then(res => {
+        if(res.images) {
+          let images = res.images
+          images.forEach(base64 => {
+            let dataBuffer =  Buffer.from(base64, 'base64');
+            let filename = new Date().getTime() + '.png'
+            console.log('fileName', filename)
+            let filePath = path.join(createImg, filename)
+            fs.writeFile(filePath, dataBuffer, { encoding: 'base64' }, (err) => {
+              if (err) {
+                console.log(err);
+              } else {
+                console.log('文件保存成功');
+                let fileBox = FileBox.fromFile(filePath)
+                contact.say(fileBox)
+              }
+            });
+          })
+        }
+      })
+    })
   }
 }
 

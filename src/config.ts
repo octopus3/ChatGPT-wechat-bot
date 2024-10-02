@@ -17,5 +17,6 @@ export default {
   // 是否在私聊中带上提问的问题
   privateReplyMode: false,
   pixivAccount: "",
-  pixivPwd: ''
+  pixivPwd: '',
+  text2imgUrl: 'http://localhost:7860/sdapi/v1/txt2img'
 };

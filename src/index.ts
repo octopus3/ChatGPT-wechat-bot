@@ -90,22 +90,19 @@ async function onMessage(msg) {
     if(content == "[收到了一个表情，请在手机上查看]") {
       contact.imgStr = '';
     }
-    const cos = RegExp(`^cos$`)
+
     const searchPicReg = RegExp(`^搜图[\\s]+`)
-    const goldRank = RegExp("^奥运会排名")
-    if(cos.test(content)) {
-      chatGPTClient.coser(contact)
-      return
-    }else if(goldRank.test(content)) {
-      chatGPTClient.searchMarjor(contact)
-      return;
-    }else if(searchPicReg.test(content)) {
+    const txt2img = RegExp(`^约稿`)
+    if(searchPicReg.test(content)) {
       let pixivId = content.replace(searchPicReg, "");
       if(/^\d+$/.test(pixivId)) {
         chatGPTClient.searchPixiv(contact, pixivId)
       }else {
         contact.say('格式不对')
       }
+    }else if(txt2img.test(content)) {
+      let params = content.replace(txt2img, "")
+      chatGPTClient.text2Image(contact, params)
     }else if (content.startsWith(config.privateKey) || config.privateKey === "") {
       let privateContent = content;
       if (config.privateKey === "") {
