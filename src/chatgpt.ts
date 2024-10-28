@@ -7,6 +7,7 @@ import path from 'path';
 import { FileBox } from 'file-box'
 import {throttle} from './utils.js'
 import {fileURLToPath} from 'url';
+import tipsData from './tips_group.js'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 let pathName = path.join(__dirname, '..', `steamData.txt`);
@@ -54,7 +55,7 @@ const cacheOptions = {
   // For example, to use a JSON file (`npm i keyv-file`) as a database:
   // store: new KeyvFile({ filename: 'cache.json' }),
 };
-const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid', '日榜图', '约稿 提示词(英文)', '提示词' ];
+const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid', '日榜图', '约稿 提示词(英文)', '提示词查询 主类-子类' ];
 const speakRuler = [`.+(\\(|（)$`];
 export default class ChatGPT {
   private chatGPT: any;
@@ -181,7 +182,7 @@ export default class ChatGPT {
     const picReg = RegExp('^日榜图$')
     const picUpdate = RegExp("^更新日榜图$")
     const sdImg = RegExp("^约稿")
-    const tipsSearch = RegExp("^提示词")
+    const tipsSearch = RegExp("^提示词查询")
     const help = "帮助";
     if(pattern1.test(content)){
       // 复读括号消息
@@ -287,6 +288,9 @@ export default class ChatGPT {
     }else if(sdImg.test(content)) {
       let params = content.replace(sdImg, "")
       this.text2Image(contact, params)
+    }else if(tipsSearch.test(content)){
+      let params = content.replace(tipsSearch, "")
+      this.searchTips(contact, params)
     }else {
       return;
     }
@@ -494,8 +498,8 @@ export default class ChatGPT {
     fetch(`https://dayu.qqsuu.cn/moyuribao/apis.php?type=json`).then(html => {
       html.json().then(res => {
         console.log(" html ==> ", res)
-        let filebox = FileBox.fromUrl(res.data)
         try {
+          let filebox = FileBox.fromUrl(res.data)
           contact.say(filebox)
         }catch(e) {
           console.log(e)
@@ -892,6 +896,52 @@ export default class ChatGPT {
         }
       })
     })
+  }
+
+  searchTips(contact, params) {
+    let tips = ''
+    let categories = tipsData.tipsGroup
+    console.log("params ==> ", params)
+    if(params == '' || params == null) {
+      categories.forEach(item => {
+        tips += item.name + ' '
+      })
+      contact.say('总共有这几个大类：' + tips + "\n" + "您可以使用类别-子类别 进行查询")
+    }else {
+      let searchList = params.trim().split("-");
+      let firstSearch = searchList[0];
+      let secondSearch = searchList[1]
+      console.log("searchList ==> ", searchList)
+      categories.forEach(items => {
+        if(firstSearch == items.name) {
+          items.groups.forEach((item, index) => {
+            if(secondSearch == '' || secondSearch == null) {
+              if(index == 0) {
+                tips += item.name
+              }else {
+                tips += ', ' + item.name
+              }
+            } else if(secondSearch == item.name) {
+              // 把标签对应的英文和中文返回出来
+              Object.keys(item.tags).forEach((keys, idx) => {
+                if(idx == 0) {
+                  tips += keys + " " + item.tags[keys]
+                }else {
+                  tips += ", " + keys + " " + item.tags[keys]
+                }
+              })
+            }
+          })
+        }
+      })
+
+      if(tips == '') {
+        contact.say("不存在该分类或该子分类")
+      }else {
+        contact.say("该类别的提示词有：\n" + tips)
+      }
+    }
+
   }
 }
 

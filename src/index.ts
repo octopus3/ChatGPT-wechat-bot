@@ -93,6 +93,7 @@ async function onMessage(msg) {
 
     const searchPicReg = RegExp(`^搜图[\\s]+`)
     const txt2img = RegExp(`^约稿`)
+    const tipsSearch = RegExp("^提示词查询")
     if(searchPicReg.test(content)) {
       let pixivId = content.replace(searchPicReg, "");
       if(/^\d+$/.test(pixivId)) {
@@ -103,6 +104,9 @@ async function onMessage(msg) {
     }else if(txt2img.test(content)) {
       let params = content.replace(txt2img, "")
       chatGPTClient.text2Image(contact, params)
+    }else if(tipsSearch.test(content)) {
+      let params = content.replace(tipsSearch, "")
+      chatGPTClient.searchTips(contact, params)
     }else if (content.startsWith(config.privateKey) || config.privateKey === "") {
       let privateContent = content;
       if (config.privateKey === "") {
