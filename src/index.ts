@@ -94,6 +94,7 @@ async function onMessage(msg) {
     const searchPicReg = RegExp(`^搜图[\\s]+`)
     const txt2img = RegExp(`^约稿`)
     const tipsSearch = RegExp("^提示词查询")
+    const mole = RegExp(`摸鱼日报`)
     if(searchPicReg.test(content)) {
       let pixivId = content.replace(searchPicReg, "");
       if(/^\d+$/.test(pixivId)) {
@@ -101,6 +102,8 @@ async function onMessage(msg) {
       }else {
         contact.say('格式不对')
       }
+    }else if(mole.test(content)) {
+        chatGPTClient.mole(contact);
     }else if(txt2img.test(content)) {
       let params = content.replace(txt2img, "")
       chatGPTClient.text2Image(contact, params)

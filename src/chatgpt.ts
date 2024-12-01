@@ -7,6 +7,7 @@ import path from 'path';
 import { FileBox } from 'file-box'
 import {throttle} from './utils.js'
 import {fileURLToPath} from 'url';
+import axios from "axios";
 import tipsData from './tips_group.js'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,7 +56,7 @@ const cacheOptions = {
   // For example, to use a JSON file (`npm i keyv-file`) as a database:
   // store: new KeyvFile({ filename: 'cache.json' }),
 };
-const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid', '日榜图', '约稿 提示词(英文)', '提示词查询 主类-子类' ];
+const cmd = [`保存表情`, `总结视频`, `bv号总结 bv号`, `谁在玩游戏`, `绑定steam steamId`, `解绑steam`, `摸鱼日报`, `随机选择 选项1 选项2 ...`, '搜图 pixid', '约稿 提示词(英文)', '提示词查询 主类-子类' ];
 const speakRuler = [`.+(\\(|（)$`];
 export default class ChatGPT {
   private chatGPT: any;
@@ -495,18 +496,60 @@ export default class ChatGPT {
   }
 
   mole(contact) {
-    fetch(`https://dayu.qqsuu.cn/moyuribao/apis.php?type=json`).then(html => {
-      html.json().then(res => {
-        console.log(" html ==> ", res)
-        try {
-          let filebox = FileBox.fromUrl(res.data)
-          contact.say(filebox)
-        }catch(e) {
-          console.log(e)
-          contact.say("这个图片打不开捏")
-        }
+    try {
+      // let params = JSON.stringify({
+      //   url: "https://dayu.qqsuu.cn/moyuribao/apis.php?type=json"
+      // })
+      // axios.get(JSON.parse(params)).then(res => {
+      //   let filebox = FileBox.fromUrl(res.data)
+      //   console.log("filebox ==>", filebox)
+      //   setTimeout(() => {
+      //     if(filebox != null) {
+      //       contact.say(filebox)
+      //     }
+      //   }, 3000)
+      // });
+
+      let params = JSON.stringify({
+        url: "https://dayu.qqsuu.cn/moyuribao/apis.php?type=json"
       })
-    })
+      let strParams = JSON.stringify({
+        responseType: 'arraybuffer'
+      })
+      axios.get('https://dayu.qqsuu.cn/moyuribao/apis.php?type=json').then(res => {
+        axios.get(res.data.data, JSON.parse(strParams)).then(res1 => {
+          console.log('res1 ==> ', res1.data.data)
+          const imgBase64 = Buffer.from(res1.data, 'binary').toString('base64');
+          const imgUrl = `data:image/png;base64,${imgBase64}`
+          let filename =  '摸鱼日报.png'
+          console.log('fileName', filename)
+          let dataBuffer =  Buffer.from(imgBase64, 'base64');
+          let filePath = path.join(__dirname, '..', filename);
+          fs.writeFile(filePath, dataBuffer, { encoding: 'base64' }, (err) => {
+            if (err) {
+              console.log(err);
+            } else {
+              console.log('文件保存成功');
+              try {
+                let fileBox = FileBox.fromFile(filePath)
+                if(fileBox != null) {
+                  contact.say(fileBox)
+                }
+              }
+              catch(err) {
+                console.log("err ==> ", err)
+              }
+            }
+          });
+        }).catch(e => {
+          console.log('error ==> ', e)
+        })
+      }).catch(e => {
+        console.log("e1 ==> ", e)
+      })
+    }catch(e) {
+      console.log('e ==>', e)
+    }
   }
 
   async picRandom(contact) {
@@ -835,7 +878,7 @@ export default class ChatGPT {
     let cmd = params.split(" ");
     let number:Number = 1
     let prompt:String = ""
-    let negative_prompt:String = "lowres,bad anatomy,bad hands,text,error,missing,fingers,extra digit,fewer digits,cropped,worst quality,low quality,normal quality,jpeg artifacts,signature,watermark,username,blurry,"
+    let negative_prompt:String = "lowres,bad anatomy,bad hands,text,error,missing,fingers,extra digit,fewer digits,cropped,worst quality,low quality,normal quality,jpeg artifacts,signature,watermark,username,blurry,muilti hands,muilti legs"
     let prompts = params.split(",")
     if(cmd[0] == '-n') {
       if(cmd[1] instanceof Number) {
@@ -852,15 +895,15 @@ export default class ChatGPT {
       prompt,
       negative_prompt: negative_prompt,
       sampler_name: "Euler a",
-      steps: 20,
+      steps: 30,
       cfg_scale: 7,
-      height: 512,
-      width: 512,
+      height: 1920,
+      width: 1080,
       seed: -1,
       enable_hr: true,
-      hr_scale: 2,
-      denoising_strength: 0.7,
-      hr_second_pass_steps: 20,
+      hr_scale: 1,
+      denoising_strength: 0.8,
+      hr_second_pass_steps: 30,
       hr_upscaler: "Latent",
       send_images: true,
       save_images: true
