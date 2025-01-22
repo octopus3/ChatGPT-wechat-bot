@@ -875,30 +875,35 @@ export default class ChatGPT {
   }
 
   async text2Image(contact, params) {
+    let paramsObj = parseParams(params);
+    console.log('params ==> ', paramsObj)
     let cmd = params.split(" ");
     let number:Number = 1
     let prompt:String = ""
-    let negative_prompt:String = "lowres,bad anatomy,bad hands,text,error,missing,fingers,extra digit,fewer digits,cropped,worst quality,low quality,normal quality,jpeg artifacts,signature,watermark,username,blurry,muilti hands,muilti legs"
+    let width = 1920
+    let height = 1080
+    let negative_prompt:String = "lowres,bad anatomy,bad hands,text,error,missing,fingers,extra digit,fewer digits,cropped,worst quality,low quality,normal quality,jpeg artifacts,signature,watermark,username,blurry,muilti hands,muilti legs, muilti person"
     let prompts = params.split(",")
-    if(cmd[0] == '-n') {
-      if(cmd[1] instanceof Number) {
-        number = cmd[1]
-        prompts = cmd[2]
-      }else {
-        contact.say("参数错误")
-      }
-    }
-    prompts.forEach(item => {
-      prompt += item + ','
-    })
+    // if(cmd[0] == '-n') {
+    //   if(cmd[1] instanceof Number) {
+    //     number = cmd[1]
+    //     prompts = cmd[2]
+    //   }else {
+    //     contact.say("参数错误")
+    //   }
+    // }
+    // prompts.forEach(item => {
+    //   prompt += item + ','
+    // })
+    prompt = paramsObj.p
     let body = JSON.stringify({
       prompt,
       negative_prompt: negative_prompt,
       sampler_name: "Euler a",
       steps: 30,
       cfg_scale: 7,
-      height: 1920,
-      width: 1080,
+      height: paramsObj.h,
+      width: paramsObj.w,
       seed: -1,
       enable_hr: true,
       hr_scale: 1,
@@ -1275,4 +1280,41 @@ function getFilesAndFoldersInDir(path) {
     }
   });
   return result;
+}
+
+function parseParams(str) {
+  const paramPattern = /(-\w)\s([^-\s][^ ]*)/g;
+  let match;
+  const params = {n: 1, w: 512, h: 512, p: ""};
+  let paramIndex = 0;
+  const parts = str.split(' ');
+
+  // 解析带参数标志的部分
+  while ((match = paramPattern.exec(str)) !== null) {
+    const [fullMatch, key, value] = match;
+    params[key.slice(1)] = value;  // 去掉 "-" 并保存到对象中
+    paramIndex = paramPattern.lastIndex;
+  }
+
+  // 提取剩余的部分作为提示词
+  const remainingStr = str.slice(paramIndex).trim();  // 从最后一个参数开始的部分
+  if (!params.p && remainingStr) {
+    params.p = remainingStr;  // 将剩余的部分作为提示词
+  }
+
+  // 设置默认值，如果没有传 -p 参数，则设置为 "提示词"
+  if (!params.p) {
+    params.p = '提示词';
+  }
+
+  // 如果没有传递 -w 或 -h 参数，则设置默认值 512
+  if (!params.w) {
+    params.w = 512;
+  }
+
+  if (!params.h) {
+    params.h = 512;
+  }
+
+  return params;
 }
